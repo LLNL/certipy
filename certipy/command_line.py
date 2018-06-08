@@ -1,4 +1,6 @@
 import argparse
+import shutil
+import sys
 from OpenSSL import crypto
 from certipy import Certipy
 
@@ -12,6 +14,8 @@ def main():
                                 --ca-name specified.""")
     parser.add_argument('--ca-name', help="The name of the CA to sign this cert."
                                 , default="")
+    parser.add_argument('--rm', action="store_true",
+            help="Remove the cert specified by name.")
     parser.add_argument('--cert-type', default="rsa", choices=['rsa', 'dsa'],
             help="The type of cert to create.")
     parser.add_argument('--bits', type=int, default=2048,
@@ -28,6 +32,15 @@ def main():
     cert_store = Certipy(store_dir=args.store_dir)
     cert_info = None
     cert_type = crypto.TYPE_RSA if args.cert_type is "rsa" else crypto.TYPE_DSA
+
+    if args.rm:
+            cert_info = cert_store.store_get(args.name)
+            if cert_info:
+                shutil.rmtree(cert_info.dir_name)
+                cert_store.store_remove(args.name)
+            else:
+                print("Unable to remove cert with name {}.".format(args.name))
+            sys.exit(0)
 
     if args.ca_name:
             ca_info = cert_store.store_get(args.ca_name)
