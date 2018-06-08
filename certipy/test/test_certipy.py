@@ -94,3 +94,13 @@ def test_create_key_pair():
 
         assert os.stat(cert_info.key_file)
         assert os.stat(cert_info.cert_file)
+
+def test_increment_serial():
+    with TemporaryDirectory() as td:
+        c = Certipy(store_dir=td)
+        ca_name = "bar"
+        c.create_ca(ca_name)
+        for name in ['foo', 'bar', 'baz']:
+            cert_info = c.create_signed_pair(name, ca_name)
+
+        assert c.serial == 4

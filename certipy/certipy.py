@@ -24,6 +24,7 @@ class Certipy():
         self.certs = {}
         self.store_dir = store_dir
         self.record_file = record_file
+        self.serial = 0
 
     def store_save(self):
         """
@@ -35,7 +36,10 @@ class Certipy():
         file_path = "{}/{}".format(self.store_dir, self.record_file)
         try:
             with open(file_path, 'w') as fh:
-                fh.write(json.dumps(self.certs))
+                out = {}
+                out['serial'] = self.serial
+                out['cert_info'] = self.certs
+                fh.write(json.dumps(out))
         except FileNotFoundError:
             print("Could not open file {} for writing.".format(file_path))
 
@@ -49,7 +53,9 @@ class Certipy():
         file_path = "{}/{}".format(self.store_dir, self.record_file)
         try:
             with open(file_path) as fh:
-                cert_info = json.load(fh)
+                store = json.load(fh)
+                self.serial = store['serial']
+                cert_info = store['cert_info']
                 for name, info in cert_info.items():
                     self.certs[name] = KeyCertPair(*info)
 
@@ -151,7 +157,7 @@ class Certipy():
         req.sign(pkey, digest)
         return req
 
-    def sign(self, req, issuer_cert_key, serial, validity_period, digest="sha256",
+    def sign(self, req, issuer_cert_key, validity_period, digest="sha256",
             extensions=None):
         """
         Generate a certificate given a certificate request.
@@ -159,7 +165,6 @@ class Certipy():
         Arguments: req        - Certificate request to use
                    issuer_cert - The certificate of the issuer
                    issuer_key  - The private key of the issuer
-                   serial     - Serial number for the certificate
                    not_before  - Timestamp (relative to now) when the certificate
                                 starts being valid
                    not_after   - Timestamp (relative to now) when the certificate
@@ -170,12 +175,14 @@ class Certipy():
         issuer_cert, issuer_key = issuer_cert_key
         not_before, not_after = validity_period
         cert = crypto.X509()
-        cert.set_serial_number(serial)
+        cert.set_serial_number(self.serial)
         cert.gmtime_adj_notBefore(not_before)
         cert.gmtime_adj_notAfter(not_after)
         cert.set_issuer(issuer_cert.get_subject())
         cert.set_subject(req.get_subject())
         cert.set_pubkey(req.get_pubkey())
+
+        self.serial += 1
 
         if extensions:
             for ext in extensions:
@@ -271,7 +278,7 @@ class Certipy():
                 crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
-        cacert = self.sign(req, (req, cakey), 0, (0, 60*60*24*365*5),
+        cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*5),
                 extensions=extensions)
 
         self.write_key_cert_pair(name, cakey, cacert)
@@ -302,7 +309,7 @@ class Certipy():
             )
 
         cakey, cacert = self.load_key_cert_pair(ca_name)
-        cert = self.sign(req, (cacert, cakey), 0, (0, 60*60*24*365*5),
+        cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*5),
                 extensions=extensions)
 
         ca_info = self.store_get(ca_name)
