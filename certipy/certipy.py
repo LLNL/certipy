@@ -10,7 +10,7 @@ import json
 from OpenSSL import crypto
 from collections import namedtuple
 
-KeyCertPair = namedtuple("KeyCertPair", "keyFile certFile")
+KeyCertPair = namedtuple("KeyCertPair", "name dirName keyFile certFile")
 
 class Certipy():
     def __init__(self, storeDir="out", recordFile="store.json"):
@@ -81,22 +81,23 @@ class Certipy():
         """
         return "{}/{}".format(self.storeDir, name)
 
-    def store_add(self, name, keyFile="", certFile=""):
+    def key_cert_pair_for_name(self, name, dirName="", keyFile="", certFile=""):
+        if not dirName:
+            dirName = "{}/{}".format(self.storeDir, name) 
+        if not keyFile:
+            keyFile = "{0}/{1}.key".format(dirName, name)
+        if not certFile:
+            certFile = "{0}/{1}.crt".format(dirName, name)
+        return KeyCertPair(name, dirName, keyFile, certFile)
+
+    def store_add(self, keyCertPair):
         """
         Add a cert reference to the store
 
-        Arguments: name - The name of the cert
-                   keyFile - The absolute path to the key
-                   certFile - The absolute path to the cert
-        Returns:   KeyCertPair object of added info
+        Arguments: keyCerPair - The KeyCertPair object to add
+        Returns:   None
         """
-        if not keyFile:
-            keyFile = "{0}/{1}.key".format(self.dir_for_name(name), name)
-        if not certFile:
-            certFile = "{0}/{1}.crt".format(self.dir_for_name(name), name)
-
-        self.certs[name] = KeyCertPair(keyFile, certFile)
-        return self.certs[name]
+        self.certs[keyCertPair.name] = keyCertPair
 
     def store_remove(self, name):
         """
@@ -203,23 +204,24 @@ class Certipy():
         Returns:   None
         """
         try:
-            certDir = self.dir_for_name(name)
-            os.makedirs(certDir, mode=0o755,  exist_ok=True)
-            certFileInfo = self.store_add(name)
-            with open(certFileInfo.keyFile, 'w') as fh:
+            certInfo = self.key_cert_pair_for_name(name)
+            os.makedirs(certInfo.dirName, mode=0o755,  exist_ok=True)
+            with open(certInfo.keyFile, 'w') as fh:
                 fh.write(
                     crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
                         .decode("utf-8")
                 )
 
-            with open(certFileInfo.certFile, 'w') as fh:
+            with open(certInfo.certFile, 'w') as fh:
                 fh.write(
                     crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
                         .decode("utf-8")
                 )
 
-            os.chmod(certFileInfo.keyFile, 0o600)
-            os.chmod(certFileInfo.certFile, 0o644)
+            os.chmod(certInfo.keyFile, 0o600)
+            os.chmod(certInfo.certFile, 0o644)
+
+            self.store_add(certInfo)
 
         except FileNotFoundError as err:
             print("Could not write file:", err)
