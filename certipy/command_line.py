@@ -12,7 +12,8 @@ def main():
                                 --ca-name specified.""")
     parser.add_argument('--ca-name', help="The name of the CA to sign this cert."
                                 , default="")
-    parser.add_argument('--cert-type', default="rsa", help="[rsa|dsa]")
+    parser.add_argument('--cert-type', default="rsa", choices=['rsa', 'dsa'],
+            help="The type of cert to create.")
     parser.add_argument('--bits', type=int, default=2048,
                                 help="The number of bits to use.")
     parser.add_argument('--valid', type=int, default=5,
