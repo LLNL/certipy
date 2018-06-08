@@ -33,8 +33,8 @@ def test_store_get():
 
         loadedInfo = c.store_get(name)
 
-        assert loadedInfo.keyFile == "{}/{}.key".format(certInfo.dirName, name)
-        assert loadedInfo.certFile == "{}/{}.crt".format(certInfo.dirName, name)
+        assert loadedInfo.key_file == "{}/{}.key".format(certInfo.dirName, name)
+        assert loadedInfo.cert_file == "{}/{}.crt".format(certInfo.dirName, name)
 
 def test_store_remove():
     with TemporaryDirectory() as td:
@@ -72,8 +72,8 @@ def test_store_load():
 
         loadedInfo = c.store_get(name)
 
-        assert loadedInfo.keyFile == "{}/{}.key".format(certInfo.dirName, name)
-        assert loadedInfo.certFile == "{}/{}.crt".format(certInfo.dirName, name)
+        assert loadedInfo.key_file == "{}/{}.key".format(certInfo.dirName, name)
+        assert loadedInfo.cert_file == "{}/{}.crt".format(certInfo.dirName, name)
 
 def test_create_ca():
     with TemporaryDirectory() as td:
@@ -81,16 +81,16 @@ def test_create_ca():
         name = "foo"
         certInfo = c.create_ca(name)
 
-        assert os.stat(certInfo.keyFile)
-        assert os.stat(certInfo.certFile)
+        assert os.stat(certInfo.key_file)
+        assert os.stat(certInfo.cert_file)
 
 def test_create_key_pair():
     with TemporaryDirectory() as td:
         c = Certipy(storeDir=td)
         name = "foo"
-        caName = "bar"
-        c.create_ca(caName)
-        certInfo = c.create_signed_pair(name, caName)
+        ca_name = "bar"
+        c.create_ca(ca_name)
+        certInfo = c.create_signed_pair(name, ca_name)
 
-        assert os.stat(certInfo.keyFile)
-        assert os.stat(certInfo.certFile)
+        assert os.stat(certInfo.key_file)
+        assert os.stat(certInfo.cert_file)

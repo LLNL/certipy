@@ -10,7 +10,7 @@ import json
 from OpenSSL import crypto
 from collections import namedtuple
 
-KeyCertPair = namedtuple("KeyCertPair", "name dirName keyFile certFile")
+KeyCertPair = namedtuple("KeyCertPair", "name dirName key_file cert_file ca_file")
 
 class Certipy():
     def __init__(self, storeDir="out", recordFile="store.json"):
@@ -72,14 +72,16 @@ class Certipy():
         except KeyError:
             print("No certificates found with name {}".format(name))
 
-    def key_cert_pair_for_name(self, name, dirName="", keyFile="", certFile=""):
+    def key_cert_pair_for_name(self, name, dirName="", key_file="", cert_file="", ca_file=""):
         if not dirName:
             dirName = "{}/{}".format(self.storeDir, name)
-        if not keyFile:
-            keyFile = "{0}/{1}.key".format(dirName, name)
-        if not certFile:
-            certFile = "{0}/{1}.crt".format(dirName, name)
-        return KeyCertPair(name, dirName, keyFile, certFile)
+        if not key_file:
+            key_file = "{0}/{1}.key".format(dirName, name)
+        if not cert_file:
+            cert_file = "{0}/{1}.crt".format(dirName, name)
+        if not ca_file:
+            ca_file = cert_file
+        return KeyCertPair(name, dirName, key_file, cert_file, ca_file)
 
     def store_add(self, keyCertPair):
         """
@@ -185,7 +187,7 @@ class Certipy():
 
         return cert
 
-    def write_key_cert_pair(self, name, key, cert):
+    def write_key_cert_pair(self, name, key, cert, signing_cert=''):
         """
         Write a key cert pair to individual files.
 
@@ -195,22 +197,22 @@ class Certipy():
         Returns:   None
         """
         try:
-            certInfo = self.key_cert_pair_for_name(name)
+            certInfo = self.key_cert_pair_for_name(name, ca_file=signing_cert)
             os.makedirs(certInfo.dirName, mode=0o755,  exist_ok=True)
-            with open(certInfo.keyFile, 'w') as fh:
+            with open(certInfo.key_file, 'w') as fh:
                 fh.write(
                     crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
                         .decode("utf-8")
                 )
 
-            with open(certInfo.certFile, 'w') as fh:
+            with open(certInfo.cert_file, 'w') as fh:
                 fh.write(
                     crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
                         .decode("utf-8")
                 )
 
-            os.chmod(certInfo.keyFile, 0o600)
-            os.chmod(certInfo.certFile, 0o644)
+            os.chmod(certInfo.key_file, 0o600)
+            os.chmod(certInfo.cert_file, 0o644)
 
             self.store_add(certInfo)
             return certInfo
@@ -229,9 +231,9 @@ class Certipy():
         cert = None
         try:
             certInfo = self.store_get(name)
-            with open(certInfo.keyFile) as fh:
+            with open(certInfo.key_file) as fh:
                 key = crypto.load_privatekey(crypto.FILETYPE_PEM, fh.read())
-            with open(certInfo.certFile) as fh:
+            with open(certInfo.cert_file) as fh:
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, fh.read())
             return (key, cert)
         except FileNotFoundError as err:
@@ -303,5 +305,6 @@ class Certipy():
         cert = self.sign(req, (cacert, cakey), 0, (0, 60*60*24*365*5),
                 extensions=extensions)
 
-        self.write_key_cert_pair(name, key, cert)
+        ca_info = self.store_get(caName)
+        self.write_key_cert_pair(name, key, cert, signing_cert=ca_info.ca_file)
         return self.store_get(name)
