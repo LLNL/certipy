@@ -31,7 +31,7 @@ import certipy
 
 certipy = Certipy(store_dir='/tmp')
 certipy.create_ca('foo')
-cert_info = certipy.store_get('foo') # KeyCertPair
+cert_info = certipy.get('foo') # KeyCertPair
 ```
 
 Creating and signing a key cert pair:
