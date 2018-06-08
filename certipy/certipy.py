@@ -23,7 +23,7 @@ class Certipy():
         Returns:   None
         """
         self.certs = {}
-        self.store_dir = os.path.abspath(store_dir)
+        self.store_dir = store_dir
         self.record_file = record_file
         self.serial = 0
 
@@ -76,7 +76,14 @@ class Certipy():
         Returns:   KeyCertPair object with location info
         """
         try:
-            return self.certs[name]
+            info = self.certs[name]
+            dir_name = os.path.abspath(info.dir_name)
+            cert_file = os.path.abspath(info.cert_file)
+            key_file = os.path.abspath(info.key_file)
+            ca_file = os.path.abspath(info.ca_file)
+            info_copy = KeyCertPair(info.name, dir_name, key_file, cert_file, ca_file)
+
+            return info_copy
         except KeyError:
             print("No certificates found with name {}".format(name))
 
