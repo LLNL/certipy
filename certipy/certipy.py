@@ -23,7 +23,7 @@ class Certipy():
         Returns:   None
         """
         self.certs = {}
-        self.store_dir = store_dir
+        self.store_dir = os.path.abspath(store_dir)
         self.record_file = record_file
         self.serial = 0
 
