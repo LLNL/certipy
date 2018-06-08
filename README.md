@@ -27,19 +27,19 @@ KeyCertPair(name='bar', dir_name='/tmp/out/bar', key_file='/tmp/out/bar/bar.key'
 Creating a certificate authority:
 
 ```
-import certipy
+from certipy import Certipy
 
-certipy = Certipy(store_dir='/tmp')
-certipy.create_ca('foo')
-cert_info = certipy.get('foo') # KeyCertPair
+store = Certipy(store_dir='/tmp')
+store.create_ca('foo')
+cert_info = store.get('foo') # KeyCertPair
 ```
 
 Creating and signing a key cert pair:
 
 ```
-import certipy
+from certipy import Certipy
 
-certipy = Certipy(store_dir='/tmp')
-certipy.create_signed_pair('bar', 'foo')
-cert_info = certipy.get('bar') # KeyCertPair
+store = Certipy(store_dir='/tmp')
+store.create_signed_pair('bar', 'foo')
+cert_info = store.get('bar') # KeyCertPair
 ```
