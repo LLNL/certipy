@@ -213,6 +213,7 @@ class Certipy():
             os.chmod(certInfo.certFile, 0o644)
 
             self.store_add(certInfo)
+            return certInfo
 
         except FileNotFoundError as err:
             print("Could not write file:", err)
@@ -246,7 +247,7 @@ class Certipy():
                    certType - The type of the cert. TYPE_RSA or TYPE_DSA
                    bits     - The number of bits to use
                    altNames - A byte string of alternative names for the CA
-        Returns:   None
+        Returns:   KeyCertPair for the new CA
         """
         cakey = self.create_key_pair(certType, bits)
         req = self.create_request(cakey, CN=name)
@@ -272,6 +273,7 @@ class Certipy():
                 extensions=extensions)
 
         self.write_key_cert_pair(name, cakey, cacert)
+        return self.store_get(name)
 
     def create_signed_pair(self, name, caName, certType=crypto.TYPE_RSA,
             bits=2048, altNames=b""):
@@ -283,7 +285,7 @@ class Certipy():
                    certType - The type of the cert. TYPE_RSA or TYPE_DSA
                    bits     - The number of bits to use
                    altNames - A byte string of alternative names for this cert
-        Returns:   None
+        Returns:   KeyCertPair for the new signed pair
         """
         key = self.create_key_pair(certType, bits)
         req = self.create_request(key, CN=name)
@@ -302,3 +304,4 @@ class Certipy():
                 extensions=extensions)
 
         self.write_key_cert_pair(name, key, cert)
+        return self.store_get(name)

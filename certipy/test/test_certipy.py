@@ -79,8 +79,7 @@ def test_create_ca():
     with TemporaryDirectory() as td:
         c = Certipy(storeDir=td)
         name = "foo"
-        c.create_ca(name)
-        certInfo = c.store_get(name)
+        certInfo = c.create_ca(name)
 
         assert os.stat(certInfo.keyFile)
         assert os.stat(certInfo.certFile)
@@ -91,8 +90,7 @@ def test_create_key_pair():
         name = "foo"
         caName = "bar"
         c.create_ca(caName)
-        c.create_signed_pair(name, caName)
-        certInfo = c.store_get(name)
+        certInfo = c.create_signed_pair(name, caName)
 
         assert os.stat(certInfo.keyFile)
         assert os.stat(certInfo.certFile)
