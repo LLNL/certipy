@@ -25,7 +25,6 @@ def main():
     args = parser.parse_args()
 
     cert_store = Certipy(store_dir=args.store_dir)
-    cert_store.store_load()
     cert_info = None
     cert_type = crypto.TYPE_RSA if args.cert_type is "rsa" else crypto.TYPE_DSA
 
@@ -41,8 +40,6 @@ def main():
         cert_info = cert_store.create_ca(args.name,
                 cert_type=cert_type, bits=args.bits, years=args.valid,
                 alt_names=args.alt_names)
-
-    cert_store.store_save()
 
     if cert_info:
         print(cert_info)

@@ -57,7 +57,6 @@ def test_store_save():
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
         c.store_add(cert_info)
-        c.store_save()
 
         assert os.stat("{}/store.json".format(td))
 
@@ -67,8 +66,6 @@ def test_store_load():
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
         c.store_add(cert_info)
-        c.store_save()
-        c.store_load()
 
         loadedInfo = c.store_get(name)
 

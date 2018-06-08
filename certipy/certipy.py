@@ -26,8 +26,9 @@ class Certipy():
         self.store_dir = store_dir
         self.record_file = record_file
         self.serial = 0
+        self._store_load()
 
-    def store_save(self):
+    def _store_save(self):
         """
         Save a JSON file detailing certs known by certipy
 
@@ -44,7 +45,7 @@ class Certipy():
         except FileNotFoundError:
             print("Could not open file {} for writing.".format(file_path))
 
-    def store_load(self):
+    def _store_load(self):
         """
         Load a JSON file detailing certs known by certipy
 
@@ -106,6 +107,7 @@ class Certipy():
         Returns:   None
         """
         self.certs[keyCertPair.name] = keyCertPair
+        self._store_save()
 
     def store_remove(self, name):
         """
@@ -116,6 +118,7 @@ class Certipy():
         """
         try:
             del self.certs[name]
+            self._store_save()
         except KeyError:
             print("No certificates found with name {}".format(name))
 
@@ -231,6 +234,7 @@ class Certipy():
             os.chmod(cert_info.cert_file, 0o644)
 
             self.store_add(cert_info)
+            self._store_save()
             return cert_info
 
         except FileNotFoundError as err:
