@@ -36,7 +36,7 @@ def main():
                         cert_type=cert_type, bits=args.bits, years=args.valid,
                         alt_names=args.alt_names)
             else:
-                print("Must specify an exisiting authority to sign this cert.")
+                print("CA {} not found. Must specify an exisiting authority to sign this cert.".format(args.ca_name))
     else:
         cert_info = cert_store.create_ca(args.name,
                 cert_type=cert_type, bits=args.bits, years=args.valid,
