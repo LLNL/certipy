@@ -7,6 +7,7 @@
 
 import os
 import json
+import argparse
 from OpenSSL import crypto
 from collections import namedtuple
 
@@ -60,7 +61,8 @@ class Certipy():
                     self.certs[name] = KeyCertPair(*info)
 
         except FileNotFoundError:
-            print("Could not find or open store file at {}.".format(file_path))
+            print("No store file at {}. Creating a new one.".format(file_path))
+            os.makedirs(self.store_dir, mode=0o755,  exist_ok=True)
         except TypeError as err:
             print("Problems loading store:", err)
         except ValueError as err:
@@ -248,7 +250,7 @@ class Certipy():
 
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
-            alt_names=b""):
+            alt_names=b"", years=5):
         """
         Create a self-signed certificate authority
 
@@ -278,14 +280,14 @@ class Certipy():
                 crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
-        cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*5),
+        cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 
         self.write_key_cert_pair(name, cakey, cacert)
         return self.store_get(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
-            bits=2048, alt_names=b""):
+            bits=2048, years=5, alt_names=b""):
         """
         Create a key-cert pair
 
@@ -309,7 +311,7 @@ class Certipy():
             )
 
         cakey, cacert = self.load_key_cert_pair(ca_name)
-        cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*5),
+        cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 
         ca_info = self.store_get(ca_name)
