@@ -10,20 +10,20 @@ import json
 from OpenSSL import crypto
 from collections import namedtuple
 
-KeyCertPair = namedtuple("KeyCertPair", "name dirName key_file cert_file ca_file")
+KeyCertPair = namedtuple("KeyCertPair", "name dir_name key_file cert_file ca_file")
 
 class Certipy():
-    def __init__(self, storeDir="out", recordFile="store.json"):
+    def __init__(self, store_dir="out", record_file="store.json"):
         """
         Init the class
 
-        Arguments: storeDir   - The base path to use for the store
-                   recordFile - The name of the file to write store info
+        Arguments: store_dir   - The base path to use for the store
+                   record_file - The name of the file to write store info
         Returns:   None
         """
         self.certs = {}
-        self.storeDir = storeDir
-        self.recordFile = recordFile
+        self.store_dir = store_dir
+        self.record_file = record_file
 
     def store_save(self):
         """
@@ -32,12 +32,12 @@ class Certipy():
         Arguments: None
         Returns:   None
         """
-        filePath = "{}/{}".format(self.storeDir, self.recordFile)
+        file_path = "{}/{}".format(self.store_dir, self.record_file)
         try:
-            with open(filePath, 'w') as fh:
+            with open(file_path, 'w') as fh:
                 fh.write(json.dumps(self.certs))
         except FileNotFoundError:
-            print("Could not open file {} for writing.".format(filePath))
+            print("Could not open file {} for writing.".format(file_path))
 
     def store_load(self):
         """
@@ -46,15 +46,15 @@ class Certipy():
         Arguments: None
         Returns:   None
         """
-        filePath = "{}/{}".format(self.storeDir, self.recordFile)
+        file_path = "{}/{}".format(self.store_dir, self.record_file)
         try:
-            with open(filePath) as fh:
-                certInfo = json.load(fh)
-                for name, info in certInfo.items():
+            with open(file_path) as fh:
+                cert_info = json.load(fh)
+                for name, info in cert_info.items():
                     self.certs[name] = KeyCertPair(*info)
 
         except FileNotFoundError:
-            print("Could not find or open store file at {}.".format(filePath))
+            print("Could not find or open store file at {}.".format(file_path))
         except TypeError as err:
             print("Problems loading store:", err)
         except ValueError as err:
@@ -72,16 +72,16 @@ class Certipy():
         except KeyError:
             print("No certificates found with name {}".format(name))
 
-    def key_cert_pair_for_name(self, name, dirName="", key_file="", cert_file="", ca_file=""):
-        if not dirName:
-            dirName = "{}/{}".format(self.storeDir, name)
+    def key_cert_pair_for_name(self, name, dir_name="", key_file="", cert_file="", ca_file=""):
+        if not dir_name:
+            dir_name = "{}/{}".format(self.store_dir, name)
         if not key_file:
-            key_file = "{0}/{1}.key".format(dirName, name)
+            key_file = "{0}/{1}.key".format(dir_name, name)
         if not cert_file:
-            cert_file = "{0}/{1}.crt".format(dirName, name)
+            cert_file = "{0}/{1}.crt".format(dir_name, name)
         if not ca_file:
             ca_file = cert_file
-        return KeyCertPair(name, dirName, key_file, cert_file, ca_file)
+        return KeyCertPair(name, dir_name, key_file, cert_file, ca_file)
 
     def store_add(self, keyCertPair):
         """
@@ -151,29 +151,29 @@ class Certipy():
         req.sign(pkey, digest)
         return req
 
-    def sign(self, req, issuerCertKey, serial, validityPeriod, digest="sha256",
+    def sign(self, req, issuer_cert_key, serial, validity_period, digest="sha256",
             extensions=None):
         """
         Generate a certificate given a certificate request.
 
         Arguments: req        - Certificate request to use
-                   issuerCert - The certificate of the issuer
-                   issuerKey  - The private key of the issuer
+                   issuer_cert - The certificate of the issuer
+                   issuer_key  - The private key of the issuer
                    serial     - Serial number for the certificate
-                   notBefore  - Timestamp (relative to now) when the certificate
+                   not_before  - Timestamp (relative to now) when the certificate
                                 starts being valid
-                   notAfter   - Timestamp (relative to now) when the certificate
+                   not_after   - Timestamp (relative to now) when the certificate
                                 stops being valid
                    digest     - Digest method to use for signing, default is sha256
         Returns:   The signed certificate in an X509 object
         """
-        issuerCert, issuerKey = issuerCertKey
-        notBefore, notAfter = validityPeriod
+        issuer_cert, issuer_key = issuer_cert_key
+        not_before, not_after = validity_period
         cert = crypto.X509()
         cert.set_serial_number(serial)
-        cert.gmtime_adj_notBefore(notBefore)
-        cert.gmtime_adj_notAfter(notAfter)
-        cert.set_issuer(issuerCert.get_subject())
+        cert.gmtime_adj_notBefore(not_before)
+        cert.gmtime_adj_notAfter(not_after)
+        cert.set_issuer(issuer_cert.get_subject())
         cert.set_subject(req.get_subject())
         cert.set_pubkey(req.get_pubkey())
 
@@ -183,7 +183,7 @@ class Certipy():
                     ext = ext(cert)
                 cert.add_extensions([ext])
 
-        cert.sign(issuerKey, digest)
+        cert.sign(issuer_key, digest)
 
         return cert
 
@@ -197,25 +197,25 @@ class Certipy():
         Returns:   None
         """
         try:
-            certInfo = self.key_cert_pair_for_name(name, ca_file=signing_cert)
-            os.makedirs(certInfo.dirName, mode=0o755,  exist_ok=True)
-            with open(certInfo.key_file, 'w') as fh:
+            cert_info = self.key_cert_pair_for_name(name, ca_file=signing_cert)
+            os.makedirs(cert_info.dir_name, mode=0o755,  exist_ok=True)
+            with open(cert_info.key_file, 'w') as fh:
                 fh.write(
                     crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
                         .decode("utf-8")
                 )
 
-            with open(certInfo.cert_file, 'w') as fh:
+            with open(cert_info.cert_file, 'w') as fh:
                 fh.write(
                     crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
                         .decode("utf-8")
                 )
 
-            os.chmod(certInfo.key_file, 0o600)
-            os.chmod(certInfo.cert_file, 0o644)
+            os.chmod(cert_info.key_file, 0o600)
+            os.chmod(cert_info.cert_file, 0o644)
 
-            self.store_add(certInfo)
-            return certInfo
+            self.store_add(cert_info)
+            return cert_info
 
         except FileNotFoundError as err:
             print("Could not write file:", err)
@@ -230,10 +230,10 @@ class Certipy():
         key = None
         cert = None
         try:
-            certInfo = self.store_get(name)
-            with open(certInfo.key_file) as fh:
+            cert_info = self.store_get(name)
+            with open(cert_info.key_file) as fh:
                 key = crypto.load_privatekey(crypto.FILETYPE_PEM, fh.read())
-            with open(certInfo.cert_file) as fh:
+            with open(cert_info.cert_file) as fh:
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, fh.read())
             return (key, cert)
         except FileNotFoundError as err:
