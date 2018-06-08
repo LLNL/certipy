@@ -1,3 +1,3 @@
-from certipy.certipy import Certipy
+from certipy.certipy import Certipy, KeyCertPair
 
-__all__ = (Certipy,)
+__all__ = (Certipy, KeyCertPair)
