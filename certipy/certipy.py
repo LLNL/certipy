@@ -8,13 +8,15 @@
 import os
 import json
 import argparse
+import logging
 from OpenSSL import crypto
 from collections import namedtuple
 
 KeyCertPair = namedtuple("KeyCertPair", "name dir_name key_file cert_file ca_file")
 
 class Certipy():
-    def __init__(self, store_dir="out", record_file="store.json"):
+    def __init__(self, store_dir="out", record_file="store.json",
+            log_file=None, log_level=logging.WARN):
         """
         Init the class
 
@@ -26,6 +28,8 @@ class Certipy():
         self.store_dir = store_dir
         self.record_file = record_file
         self.serial = 0
+        logging.basicConfig(filename=log_file, level=log_level)
+        self.log = logging.getLogger('Certipy')
         self._load()
 
     def _save(self):
@@ -43,7 +47,7 @@ class Certipy():
                 out['cert_info'] = self.certs
                 fh.write(json.dumps(out))
         except FileNotFoundError:
-            print("Could not open file {} for writing.".format(file_path))
+            self.log.warn("Could not open file {} for writing.".format(file_path))
 
     def _load(self):
         """
@@ -62,12 +66,12 @@ class Certipy():
                     self.certs[name] = KeyCertPair(*info)
 
         except FileNotFoundError:
-            print("No store file at {}. Creating a new one.".format(file_path))
+            self.log.info("No store file at {}. Creating a new one.".format(file_path))
             os.makedirs(self.store_dir, mode=0o755,  exist_ok=True)
         except TypeError as err:
-            print("Problems loading store:", err)
+            self.log.warn("Problems loading store:", err)
         except ValueError as err:
-            print("Problems loading store:", err)
+            self.log.warn("Problems loading store:", err)
 
     def get(self, name):
         """
@@ -86,7 +90,7 @@ class Certipy():
 
             return info_copy
         except KeyError:
-            print("No certificates found with name {}".format(name))
+            self.log.warn("No certificates found with name {}".format(name))
 
     def key_cert_pair_for_name(self, name, dir_name="", key_file="", cert_file="", ca_file=""):
         if not dir_name:
@@ -120,7 +124,7 @@ class Certipy():
             del self.certs[name]
             self._save()
         except KeyError:
-            print("No certificates found with name {}".format(name))
+            self.log.warn("No certificates found with name {}".format(name))
 
     def create_key_pair(self, cert_type, bits):
         """
@@ -238,7 +242,7 @@ class Certipy():
             return cert_info
 
         except FileNotFoundError as err:
-            print("Could not write file:", err)
+            self.log.warn("Could not write file:", err)
 
     def load_key_cert_pair(self, name):
         """
@@ -257,7 +261,7 @@ class Certipy():
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, fh.read())
             return (key, cert)
         except FileNotFoundError as err:
-            print("Could not load file:", err)
+            self.log.warn("Could not load file:", err)
 
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
