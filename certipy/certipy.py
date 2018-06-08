@@ -104,7 +104,7 @@ class Certipy():
         except KeyError:
             print("No certificates found with name {}".format(name))
 
-    def create_key_pair(self, certType, bits):
+    def create_key_pair(self, cert_type, bits):
         """
         Create a public/private key pair.
 
@@ -113,7 +113,7 @@ class Certipy():
         Returns:   The public/private key pair in a PKey object
         """
         pkey = crypto.PKey()
-        pkey.generate_key(certType, bits)
+        pkey.generate_key(cert_type, bits)
         return pkey
 
     def create_request(self, pkey, digest="sha256", **name):
@@ -240,18 +240,18 @@ class Certipy():
             print("Could not load file:", err)
 
 
-    def create_ca(self, name, certType=crypto.TYPE_RSA, bits=2048,
-            altNames=b""):
+    def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
+            alt_names=b""):
         """
         Create a self-signed certificate authority
 
         Arguments: name     - The name of the CA
-                   certType - The type of the cert. TYPE_RSA or TYPE_DSA
+                   cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
                    bits     - The number of bits to use
-                   altNames - A byte string of alternative names for the CA
+                   alt_names - A byte string of alternative names for the CA
         Returns:   KeyCertPair for the new CA
         """
-        cakey = self.create_key_pair(certType, bits)
+        cakey = self.create_key_pair(cert_type, bits)
         req = self.create_request(cakey, CN=name)
         extensions = [
             crypto.X509Extension(b"basicConstraints", True,
@@ -266,9 +266,9 @@ class Certipy():
                 b"keyid:always", issuer=cert),
         ]
 
-        if altNames:
+        if alt_names:
             extensions.append(
-                crypto.X509Extension(b"subjectAltName", False, altNames)
+                crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
         cacert = self.sign(req, (req, cakey), 0, (0, 60*60*24*365*5),
@@ -277,34 +277,34 @@ class Certipy():
         self.write_key_cert_pair(name, cakey, cacert)
         return self.store_get(name)
 
-    def create_signed_pair(self, name, caName, certType=crypto.TYPE_RSA,
-            bits=2048, altNames=b""):
+    def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
+            bits=2048, alt_names=b""):
         """
         Create a key-cert pair
 
         Arguments: name     - The name of the key-cert pair
-                   caName   - The name of the CA to sign this cert
-                   certType - The type of the cert. TYPE_RSA or TYPE_DSA
+                   ca_name   - The name of the CA to sign this cert
+                   cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
                    bits     - The number of bits to use
-                   altNames - A byte string of alternative names for this cert
+                   alt_names - A byte string of alternative names for this cert
         Returns:   KeyCertPair for the new signed pair
         """
-        key = self.create_key_pair(certType, bits)
+        key = self.create_key_pair(cert_type, bits)
         req = self.create_request(key, CN=name)
         extensions = [
             crypto.X509Extension(b"extendedKeyUsage", True,
                 b"serverAuth, clientAuth"),
         ]
 
-        if altNames:
+        if alt_names:
             extensions.append(
-                crypto.X509Extension(b"subjectAltName", False, altNames)
+                crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
-        cakey, cacert = self.load_key_cert_pair(caName)
+        cakey, cacert = self.load_key_cert_pair(ca_name)
         cert = self.sign(req, (cacert, cakey), 0, (0, 60*60*24*365*5),
                 extensions=extensions)
 
-        ca_info = self.store_get(caName)
+        ca_info = self.store_get(ca_name)
         self.write_key_cert_pair(name, key, cert, signing_cert=ca_info.ca_file)
         return self.store_get(name)
