@@ -34,16 +34,16 @@ def main():
     cert_type = crypto.TYPE_RSA if args.cert_type is "rsa" else crypto.TYPE_DSA
 
     if args.rm:
-            cert_info = cert_store.store_get(args.name)
+            cert_info = cert_store.get(args.name)
             if cert_info:
                 shutil.rmtree(cert_info.dir_name)
-                cert_store.store_remove(args.name)
+                cert_store.remove(args.name)
             else:
                 print("Unable to remove cert with name {}.".format(args.name))
             sys.exit(0)
 
     if args.ca_name:
-            ca_info = cert_store.store_get(args.ca_name)
+            ca_info = cert_store.get(args.ca_name)
             if ca_info:
                 cert_info = cert_store.create_signed_pair(args.name, args.ca_name,
                         cert_type=cert_type, bits=args.bits, years=args.valid,

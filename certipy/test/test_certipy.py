@@ -20,7 +20,7 @@ def test_store_add():
         c = Certipy(store_dir=td)
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
-        c.store_add(cert_info)
+        c.add(cert_info)
 
         assert name in c.certs
 
@@ -29,9 +29,9 @@ def test_store_get():
         c = Certipy(store_dir=td)
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
-        c.store_add(cert_info)
+        c.add(cert_info)
 
-        loadedInfo = c.store_get(name)
+        loadedInfo = c.get(name)
 
         assert loadedInfo.key_file == "{}/{}.key".format(cert_info.dir_name, name)
         assert loadedInfo.cert_file == "{}/{}.crt".format(cert_info.dir_name, name)
@@ -41,13 +41,13 @@ def test_store_remove():
         c = Certipy(store_dir=td)
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
-        c.store_add(cert_info)
-        cert_info = c.store_get(name)
+        c.add(cert_info)
+        cert_info = c.get(name)
 
         assert cert_info is not None
 
-        c.store_remove(name)
-        cert_info = c.store_get(name)
+        c.remove(name)
+        cert_info = c.get(name)
 
         assert cert_info is None
 
@@ -56,7 +56,7 @@ def test_store_save():
         c = Certipy(store_dir=td)
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
-        c.store_add(cert_info)
+        c.add(cert_info)
 
         assert os.stat("{}/store.json".format(td))
 
@@ -65,9 +65,9 @@ def test_store_load():
         c = Certipy(store_dir=td)
         name = "foo"
         cert_info = c.key_cert_pair_for_name(name)
-        c.store_add(cert_info)
+        c.add(cert_info)
 
-        loadedInfo = c.store_get(name)
+        loadedInfo = c.get(name)
 
         assert loadedInfo.key_file == "{}/{}.key".format(cert_info.dir_name, name)
         assert loadedInfo.cert_file == "{}/{}.crt".format(cert_info.dir_name, name)

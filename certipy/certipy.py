@@ -26,9 +26,9 @@ class Certipy():
         self.store_dir = store_dir
         self.record_file = record_file
         self.serial = 0
-        self._store_load()
+        self._load()
 
-    def _store_save(self):
+    def _save(self):
         """
         Save a JSON file detailing certs known by certipy
 
@@ -45,7 +45,7 @@ class Certipy():
         except FileNotFoundError:
             print("Could not open file {} for writing.".format(file_path))
 
-    def _store_load(self):
+    def _load(self):
         """
         Load a JSON file detailing certs known by certipy
 
@@ -69,7 +69,7 @@ class Certipy():
         except ValueError as err:
             print("Problems loading store:", err)
 
-    def store_get(self, name):
+    def get(self, name):
         """
         Get info about a cert in the store
 
@@ -99,7 +99,7 @@ class Certipy():
             ca_file = cert_file
         return KeyCertPair(name, dir_name, key_file, cert_file, ca_file)
 
-    def store_add(self, keyCertPair):
+    def add(self, keyCertPair):
         """
         Add a cert reference to the store
 
@@ -107,9 +107,9 @@ class Certipy():
         Returns:   None
         """
         self.certs[keyCertPair.name] = keyCertPair
-        self._store_save()
+        self._save()
 
-    def store_remove(self, name):
+    def remove(self, name):
         """
         Remove a cert reference from the store
 
@@ -118,7 +118,7 @@ class Certipy():
         """
         try:
             del self.certs[name]
-            self._store_save()
+            self._save()
         except KeyError:
             print("No certificates found with name {}".format(name))
 
@@ -233,8 +233,8 @@ class Certipy():
             os.chmod(cert_info.key_file, 0o600)
             os.chmod(cert_info.cert_file, 0o644)
 
-            self.store_add(cert_info)
-            self._store_save()
+            self.add(cert_info)
+            self._save()
             return cert_info
 
         except FileNotFoundError as err:
@@ -250,7 +250,7 @@ class Certipy():
         key = None
         cert = None
         try:
-            cert_info = self.store_get(name)
+            cert_info = self.get(name)
             with open(cert_info.key_file) as fh:
                 key = crypto.load_privatekey(crypto.FILETYPE_PEM, fh.read())
             with open(cert_info.cert_file) as fh:
@@ -295,7 +295,7 @@ class Certipy():
                 extensions=extensions)
 
         self.write_key_cert_pair(name, cakey, cacert)
-        return self.store_get(name)
+        return self.get(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
             bits=2048, years=5, alt_names=b""):
@@ -325,6 +325,6 @@ class Certipy():
         cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 
-        ca_info = self.store_get(ca_name)
+        ca_info = self.get(ca_name)
         self.write_key_cert_pair(name, key, cert, signing_cert=ca_info.ca_file)
-        return self.store_get(name)
+        return self.get(name)
