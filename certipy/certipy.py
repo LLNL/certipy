@@ -72,18 +72,9 @@ class Certipy():
         except KeyError:
             print("No certificates found with name {}".format(name))
 
-    def dir_for_name(self, name):
-        """
-        Create a path string to a named directory
-
-        Arguments: name - The name to use for the path
-        Returns:   A path string
-        """
-        return "{}/{}".format(self.storeDir, name)
-
     def key_cert_pair_for_name(self, name, dirName="", keyFile="", certFile=""):
         if not dirName:
-            dirName = "{}/{}".format(self.storeDir, name) 
+            dirName = "{}/{}".format(self.storeDir, name)
         if not keyFile:
             keyFile = "{0}/{1}.key".format(dirName, name)
         if not certFile:
