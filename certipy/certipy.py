@@ -1,9 +1,6 @@
-# -*- coding: latin-1 -*-
-#
-# Copyright (C) AB Strakt
-# Copyright (C) Jean-Paul Calderone
-# Methods adapted from PyOpenssl's example cergen.py by Thomas Mendoza
-# See LICENSE for details.
+# Copyright (c) 2018, Lawrence Livermore National Security, LLC.
+# Distributed under the terms of the Modified BSD License.
+# Methods adapted by Thomas Mendoza from PyOpenssl's example cergen.py
 
 import os
 import json

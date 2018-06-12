@@ -1,3 +1,5 @@
+# Copyright (c) 2018, Lawrence Livermore National Security, LLC.
+# Distributed under the terms of the Modified BSD License.
 
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
@@ -30,7 +32,7 @@ setup(
     author_email='mendoza33@llnl.gov',
 
     # Choose your license
-    license='UNLICENSED',
+    license='BSD',
 
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
@@ -45,7 +47,7 @@ setup(
         'Topic :: Software Development :: PKI',
 
         # Pick your license as you wish (should match "license" above)
-        'License :: UNLICENSED',
+        'License :: BSD',
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
