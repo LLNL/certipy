@@ -43,3 +43,9 @@ store = Certipy(store_dir='/tmp')
 store.create_signed_pair('bar', 'foo')
 cert_info = store.get('bar') # KeyCertPair
 ```
+
+### Release
+
+Certipy is released under BSD license. For more details see the LICENSE file.
+
+LLNL-CODE-754897
