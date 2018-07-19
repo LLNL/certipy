@@ -62,12 +62,20 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
+from setuptools import setup
+
+try:
+    from pypandoc import convert
+    read_md = lambda f: convert(f, 'rst', 'md')
+except ImportError:
+    print("warning: pypandoc module not found, could not convert Markdown to RST")
+    read_md = lambda f: open(f, 'r').read()
 
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+    long_description = read_md(f.read())
 
 setup(
     name='certipy',
