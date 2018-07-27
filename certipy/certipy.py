@@ -314,7 +314,35 @@ class Certipy():
             return (key, cert)
         except FileNotFoundError as err:
             self.log.warn("Could not load file:", err)
+            raise
 
+    def create_ca_bundle(self, ca_names, bundle_name):
+        """
+        Create a bundle of CA public certs for trust distribution
+
+        Arguments: ca_names    - The names of CAs to include in the bundle
+                   bundle_name - The name of the bundle file to output
+        Returns:   Path to the bundle file
+        """
+        ca_certs = []
+        for name in ca_names:
+            cert = self.load_key_cert_pair(name)[1]
+            if cert:
+                ca_certs.append(cert)
+
+        bundle = "".join(
+                    [crypto.dump_certificate(crypto.FILETYPE_PEM, cert)\
+                        .decode("utf-8") for cert in ca_certs]
+                 )
+        file_path = "{out}/{name}.crt".format(out=self.store_dir,
+                name=bundle_name)
+        try:
+            with open(file_path, 'w') as fh:
+                fh.write(bundle)
+            return file_path
+        except FileNotFoundError as err:
+            self.log.warn("Could not open {} for writing:".format(file_path),
+                    err)
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
             alt_names=b"", years=5):

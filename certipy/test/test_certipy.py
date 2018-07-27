@@ -140,6 +140,23 @@ def test_create_ca():
         assert os.stat(cert_info.key_file)
         assert os.stat(cert_info.cert_file)
 
+def test_create_ca_bundle():
+    with TemporaryDirectory() as td:
+        c = Certipy(store_dir=td)
+        name1 = "foo"
+        name2 = "bar"
+        cert_info1 = c.create_ca(name1)
+        cert_info2 = c.create_ca(name2)
+        bundle_file = c.create_ca_bundle([name1, name2], 'bundle')
+        with open(bundle_file) as bundle_handle,\
+             open(cert_info1.cert_file) as cert1_handle,\
+             open(cert_info2.cert_file) as cert2_handle:
+            bundle = bundle_handle.read()
+            cert1 = cert1_handle.read()
+            cert2 = cert2_handle.read()
+            assert cert1 in bundle
+            assert cert2 in bundle
+
 def test_create_key_pair():
     with TemporaryDirectory() as td:
         c = Certipy(store_dir=td)
