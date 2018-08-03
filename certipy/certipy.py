@@ -120,6 +120,7 @@ class Certipy():
         except FileNotFoundError:
             self.log.info("No store file at {}. Creating a new one.".format(file_path))
             os.makedirs(self.store_dir, mode=0o755,  exist_ok=True)
+            os.chmod(self.store_dir, 0o755)
         except TypeError as err:
             self.log.warn("Problems loading store:", err)
         except ValueError as err:
@@ -274,6 +275,9 @@ class Certipy():
         try:
             cert_info = self.key_cert_pair_for_name(name, ca_file=signing_cert)
             os.makedirs(cert_info.dir_name, mode=0o755,  exist_ok=True)
+
+            # Explicitly set this in case umask has other ideas
+            os.chmod(cert_info.dir_name, 0o755)
             with open(cert_info.key_file, 'w') as fh:
                 fh.write(
                     crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
@@ -339,6 +343,7 @@ class Certipy():
         try:
             with open(file_path, 'w') as fh:
                 fh.write(bundle)
+            os.chmod(file_path, 0o644)
             return file_path
         except FileNotFoundError as err:
             self.log.warn("Could not open {} for writing:".format(file_path),
