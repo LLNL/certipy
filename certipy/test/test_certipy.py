@@ -60,10 +60,115 @@
 import os
 import pytest
 import shutil
+from pytest import fixture
+from OpenSSL import crypto
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
-from ..certipy import Certipy
+from ..certipy import (
+   TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
+   CertExistsError, Certipy
+)
+
+@fixture(scope='module')
+def signed_key_pair():
+    pkey = crypto.PKey()
+    pkey.generate_key(crypto.TYPE_RSA, 2048)
+    req = crypto.X509Req()
+    subj = req.get_subject()
+
+    setattr(subj, 'CN', 'test')
+
+    req.set_pubkey(pkey)
+    req.sign(pkey, 'sha256')
+
+    issuer_cert, issuer_key = (req, pkey)
+    not_before, not_after = (0, 60*60*24*365*2)
+    cert = crypto.X509()
+    cert.set_serial_number(0)
+    cert.gmtime_adj_notBefore(not_before)
+    cert.gmtime_adj_notAfter(not_after)
+    cert.set_issuer(issuer_cert.get_subject())
+    cert.set_subject(req.get_subject())
+    cert.set_pubkey(req.get_pubkey())
+
+    cert.sign(issuer_key, 'sha256')
+    return (pkey, cert)
+
+@fixture(scope='module')
+def record():
+    return {
+        'serial': 0,
+        'parent_ca': '',
+        'signees': None,
+        'files': {
+            'key': 'out/foo.key',
+            'cert': 'out/foo.crt',
+            'ca': 'out/ca.crt',
+        },
+    }
+
+
+def test_tls_context_manager():
+    def simple_perms(f):
+        return oct(os.stat(f).st_mode & 0o777)
+
+    # read
+    with pytest.raises(OSError) as e:
+        with open_tls_file('foo.test', 'r') as tlsfh:
+            pass
+
+    with NamedTemporaryFile('w') as fh:
+        with open_tls_file(fh.name, 'r') as tlsfh:
+            pass
+    # write
+    with NamedTemporaryFile('w') as fh:
+        containing_dir = os.path.dirname(fh.name)
+        # public certificate
+        with open_tls_file(fh.name, 'w', private=False) as tlsfh:
+            assert simple_perms(containing_dir) == '0o755'
+
+        assert simple_perms(fh.name) == '0o644'
+
+        # private certificate
+        with open_tls_file(fh.name, 'w') as tlsfh:
+            assert simple_perms(containing_dir) == '0o755'
+
+        assert simple_perms(fh.name) == '0o600'
+
+
+def test_tls_file(signed_key_pair):
+    key, cert = signed_key_pair
+    def read_write_key(file_type):
+        with NamedTemporaryFile('w') as fh:
+            tlsfile = TLSFile(fh.name, file_type=file_type)
+            # test persist to disk
+            x509 = cert if file_type is TLSFileType.CERT else key
+            tlsfile.save(x509)
+            with open(fh.name, 'r') as f:
+                assert f.read() is not None
+            # test load from disk
+            loaded_tlsfile = TLSFile(fh.name, file_type=file_type)
+            loaded_tlsfile.x509 = tlsfile.load()
+            assert str(loaded_tlsfile) == str(tlsfile)
+
+    # public key
+    read_write_key(TLSFileType.CERT)
+
+    # private key
+    read_write_key(TLSFileType.KEY)
+
+def test_tls_file_bundle(signed_key_pair, record):
+    key, cert = signed_key_pair
+    # from record
+    bundle = TLSFileBundle('foo').from_record(record)
+    assert bundle.key and bundle.cert and bundle.ca
+
+    # to record
+    exported_record = bundle.to_record()
+    f_types = {key for key in exported_record['files'].keys()}
+    assert len(f_types) == 3
+    assert f_types == {'key', 'cert', 'ca'}
 
 def test_key_cert_pair_for_name():
     with TemporaryDirectory() as td:

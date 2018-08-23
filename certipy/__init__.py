@@ -57,6 +57,12 @@
 # purposes.
 ###############################################################################
 
-from certipy.certipy import Certipy, KeyCertPair
+from certipy.certipy import (
+   TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
+   CertExistsError, Certipy
+)
 
-__all__ = (Certipy, KeyCertPair)
+__all__ = (
+   TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
+   CertExistsError, Certipy
+)

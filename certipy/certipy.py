@@ -61,11 +61,55 @@ import os
 import json
 import argparse
 import logging
+from enum import Enum
 from OpenSSL import crypto
 from collections import namedtuple
+from contextlib import contextmanager
 
+class TLSFileType(Enum):
+    KEY = 'key'
+    CERT = 'cert'
+    CA = 'ca'
+
+@contextmanager
+def open_tls_file(file_path, mode, private=True):
+    """Context to ensure correct file permissions for certs and directories
+
+    Ensures:
+        - A containing directory with appropriate permissions
+        - Correct file permissions based on what the file is (0o600 for keys
+        and 0o644 for certs)
+    """
+
+    containing_dir = os.path.dirname(file_path)
+    fh = None
+    try:
+        if 'w' in mode:
+            os.chmod(containing_dir, mode=0o755)
+        fh = open(file_path, mode)
+    except OSError as e:
+        if 'w' in mode:
+            os.makedirs(containing_dir, mode=0o755, exist_ok=True)
+            os.chmod(containing_dir, mode=0o755)
+            fh = open(file_path, 'w')
+        else:
+            raise
+    yield fh
+    mode = 0o600 if private else 0o644
+    os.chmod(file_path, mode=mode)
+    fh.close()
+
+class TLSFile():
+    """Describes basic information about files used for TLS"""
 KeyCertPair = namedtuple("KeyCertPair", "name dir_name key_file cert_file ca_file")
 
+    def __init__(self, file_path, encoding=crypto.FILETYPE_PEM,
+            file_type=TLSFileType.CERT, x509=None):
+        self.file_path = file_path
+        self.containing_dir = os.path.dirname(self.file_path)
+        self.encoding = encoding
+        self.file_type = file_type
+        self.x509 = x509
 class Certipy():
     def __init__(self, store_dir="out", record_file="store.json",
             log_file=None, log_level=logging.WARN):
@@ -88,6 +132,10 @@ class Certipy():
         """
         Save a JSON file detailing certs known by certipy
 
+    def __str__(self):
+        data = ''
+        if not self.x509:
+            return data
         Arguments: None
         Returns:   None
         """
@@ -105,6 +153,12 @@ class Certipy():
         """
         Load a JSON file detailing certs known by certipy
 
+        if self.file_type is TLSFileType.KEY:
+            data = crypto.dump_privatekey(self.encoding,
+                self.x509).decode("utf-8")
+        else:
+            data = crypto.dump_certificate(self.encoding,
+                self.x509).decode("utf-8")
         Arguments: None
         Returns:   None
         """
@@ -130,6 +184,7 @@ class Certipy():
         """
         Get info about a cert in the store
 
+        return data
         Arguments: name - The name of the cert to find
         Returns:   KeyCertPair object with location info
         """
@@ -166,10 +221,30 @@ class Certipy():
         self.certs[keyCertPair.name] = keyCertPair
         self._save()
 
+    def is_private(self):
+        return True if self.file_type is TLSFileType.KEY else False
+
+
+    def load(self):
+        """Load from a file and return an x509 object"""
+        private = self.is_private()
+        with open_tls_file(self.file_path, 'r', private=private) as fh:
+            if private:
+                return crypto.load_privatekey(self.encoding, fh.read())
+            else:
+                return crypto.load_certificate(self.encoding, fh.read())
     def remove(self, name):
         """
         Remove a cert reference from the store
 
+
+    def save(self, x509):
+        """Persist this x509 object to disk"""
+
+        self.x509 = x509
+        with open_tls_file(self.file_path, 'w',
+                private=self.is_private()) as fh:
+            fh.write(str(self))
         Arguments: name - The name of the cert
         Returns:   None
         """
@@ -178,6 +253,49 @@ class Certipy():
             self._save()
         except KeyError:
             self.log.warn("No certificates found with name {}".format(name))
+class TLSFileBundle():
+    """Maintains information that is shared by a set of TLSFiles"""
+
+    def __init__(self, common_name, files=None, serial=0, is_ca=False,
+            parent_ca='', signees=None):
+        self.serial = serial
+        self.parent_ca = parent_ca
+        self.signees = signees
+        for t in TLSFileType:
+            setattr(self, t.value, None)
+
+        files = files or {}
+        self._setup_tls_files(files)
+
+
+    def _setup_tls_files(self, files):
+        for file_type, file_path in files.items():
+            setattr(self, file_type, TLSFile(file_path, file_type=file_type))
+
+    def load_all(self):
+        for t in TLSFileType:
+            self[t.value].load()
+        return self
+
+    def is_ca(self):
+        return bool(self.parent_ca)
+
+    def to_record(self):
+        tf_list = [getattr(self, k, None) for k in
+                [_.value for _ in TLSFileType]]
+        return {
+            'serial': self.serial,
+            'parent_ca': self.parent_ca,
+            'signees': self.signees,
+            'files': {tf.file_type: tf.file_path for tf in tf_list},
+        }
+
+    def from_record(self, record):
+        self.serial = record['serial']
+        self.parent_ca = record['parent_ca']
+        self.signees = record['signees']
+        self._setup_tls_files(record['files'])
+        return self
 
     def create_key_pair(self, cert_type, bits):
         """
