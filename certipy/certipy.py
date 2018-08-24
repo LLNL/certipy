@@ -76,6 +76,11 @@ class CertExistsError(Exception):
         super().__init__(message)
         self.errors = errors
 
+class CertificateAuthorityInUseError(Exception):
+    def __init__(self, message, errors):
+        super().__init__(message)
+        self.errors = errors
+
 @contextmanager
 def open_tls_file(file_path, mode, private=True):
     """Context to ensure correct file permissions for certs and directories
