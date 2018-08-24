@@ -62,6 +62,7 @@ import json
 import argparse
 import logging
 from enum import Enum
+from collections import Counter
 from OpenSSL import crypto
 from contextlib import contextmanager
 
@@ -367,9 +368,10 @@ class CertStore():
 
         ca_record = self.get_record(ca_name)
         signee_record = self.get_record(signee_name)
-        signees = ca_record['signees'] or []
+        signees = ca_record['signees'] or {}
+        signees = Counter(signees)
         if signee_name not in signees:
-            signees.append(signee_name)
+            signees[signee_name] = 1
             ca_record['signees'] = signees
             signee_record['parent_ca'] = ca_name
 
@@ -379,9 +381,10 @@ class CertStore():
 
         ca_record = self.get_record(ca_name)
         signee_record = self.get_record(signee_name)
-        signees = ca_record['signees'] or []
+        signees = ca_record['signees'] or {}
+        signees = Counter(signees)
         if signee_name in signees:
-            signees.remove(signee_name)
+            signees[signee_name] = 0
             ca_record['signees'] = signees
             signee_record['parent_ca'] = ''
 
@@ -400,7 +403,7 @@ class CertStore():
         """Delete files and record associated with this common name"""
 
         bundle = self.get_files(common_name)
-        num_signees = len(bundle.signees)
+        num_signees = len(Counter(bundle.signees))
         if bundle.is_ca() and num_signees > 0:
             raise CertificateAuthorityInUseError(
                 "Authority {name} has signed {x} certificates"
