@@ -136,11 +136,14 @@ class TLSFile():
 
 
     def is_private(self):
+        """Is this a private key"""
+
         return True if self.file_type is TLSFileType.KEY else False
 
 
     def load(self):
         """Load from a file and return an x509 object"""
+
         private = self.is_private()
         with open_tls_file(self.file_path, 'r', private=private) as fh:
             if private:
@@ -176,6 +179,8 @@ class TLSFileBundle():
 
 
     def _setup_tls_files(self, files):
+        """Initiates TLSFIle objects with the paths given to this bundle"""
+
         for t in TLSFileType:
             if t.value in files:
                 file_path = files[t.value]
@@ -201,12 +206,18 @@ class TLSFileBundle():
 
 
     def load_all(self):
+        """Utility to load bring all files into memory"""
+
         for t in TLSFileType:
             self[t.value].load()
         return self
 
+
     def is_ca(self):
+        """Is this bundle for a CA certificate"""
+
         return bool(self.parent_ca)
+
 
     def to_record(self):
         """Create a CertStore record from this TLSFileBundle"""
@@ -221,6 +232,7 @@ class TLSFileBundle():
             'signees': self.signees,
             'files': {tf.file_type.value: tf.file_path for tf in tf_list},
         }
+
 
     def from_record(self, record):
         """Build a bundle from a CertStore record"""
@@ -274,6 +286,7 @@ class CertStore():
         the file paths to the files that make up that cert. This method
         returns just that and doesn't bother loading the associated files.
         """
+
         return self.store[common_name]
 
 
