@@ -70,6 +70,11 @@ class TLSFileType(Enum):
     CERT = 'cert'
     CA = 'ca'
 
+class CertNotFoundError(Exception):
+    def __init__(self, message, errors):
+        super().__init__(message)
+        self.errors = errors
+
 class CertExistsError(Exception):
     def __init__(self, message, errors):
         super().__init__(message)
@@ -287,13 +292,18 @@ class CertStore():
         returns just that and doesn't bother loading the associated files.
         """
 
-        return self.store[common_name]
+        try:
+            record = self.store[common_name]
+            return record
+        except KeyError as e:
+            raise CertNotFoundError("Unable to find record of {name}"
+                .format(name=common_name), e)
 
 
     def get_files(self, common_name):
         """Return a bundle of TLS files associated with a common name"""
 
-        record = self.store[common_name]
+        record = self.get_record(common_name)
         return TLSFileBundle(common_name).from_record(record)
 
 
@@ -335,11 +345,11 @@ class CertStore():
             file_base = file_base_tmpl.format(
                 prefix=self.containing_dir, cn=common_name
             )
-            # TODO: Look up the CA for this parent name and use its
-            # public cert path
-            ca_file = '' if not parent_ca else file_base_tmpl.format(
-                prefix=self.containing_dir, cn=parent_ca
-            ) + '.crt'
+            try:
+                ca_record = self.get_record(parent_ca)
+                ca_file = ca_record['files']['cert']
+            except CertNotFoundError:
+                ca_file = ''
             files = files or {
                 'key': file_base + '.key',
                 'cert': file_base + '.crt',
