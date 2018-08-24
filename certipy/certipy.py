@@ -186,10 +186,11 @@ class TLSFileBundle():
     def _setup_tls_files(self, files):
         """Initiates TLSFIle objects with the paths given to this bundle"""
 
-        for t in TLSFileType:
-            if t.value in files:
-                file_path = files[t.value]
-                setattr(self, t.value, TLSFile(file_path, file_type=t))
+        for file_type in TLSFileType:
+            if file_type.value in files:
+                file_path = files[file_type.value]
+                setattr(self, file_type.value,
+                    TLSFile(file_path, file_type=file_type))
 
 
     def _save_x509s(self, x509s):
