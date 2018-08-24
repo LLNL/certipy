@@ -559,13 +559,10 @@ class Certipy():
         cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 
-        x509s = {
-            key: cakey,
-            cert: cacert,
-            ca: cacert,
-        }
+        x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
         self.store.add_files(name, x509s)
-        return self.get(name)
+        self.store.save()
+        return self.store.get_record(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
             bits=2048, years=5, alt_names=b"", serial=0):
@@ -591,10 +588,17 @@ class Certipy():
                 crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
-        cakey, cacert = self.store.get_files(ca_name)
+        ca_bundle = self.store.get_files(ca_name)
+        cacert = ca_bundle.cert.load()
+        cakey = ca_bundle.key.load()
+
         cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 
-        ca_info = self.get(ca_name)
-        self.write_key_cert_pair(name, key, cert, signing_cert=ca_info.ca_file)
-        return self.get(name)
+        x509s = {'key': key, 'cert': cert, 'ca': None}
+        self.store.add_files(name, x509s, parent_ca=ca_name)
+
+        # Relate these certs as being parent and child
+        self.store.add_sign_link(ca_name, name)
+        self.store.save()
+        return self.store.get_record(name)

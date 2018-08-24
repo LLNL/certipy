@@ -215,3 +215,27 @@ def test_certipy_store(signed_key_pair, record):
         assert len(main_record['signees']) == 1
         assert signee_record['parent_ca'] == common_name
 
+def test_certipy():
+    with TemporaryDirectory() as td:
+        # create a CA
+        ca_name = 'foo'
+        certipy = Certipy(store_dir=td)
+        ca_record = certipy.create_ca(ca_name)
+
+        non_empty_paths = [f for f in ca_record['files'].values() if f]
+        assert len(non_empty_paths) == 2
+
+        # check that the paths are backed by actual files
+        ca_bundle = certipy.store.get_files(ca_name)
+        assert ca_bundle.key.load() is not None
+        assert ca_bundle.cert.load() is not None
+        assert 'PRIVATE' in str(ca_bundle.key)
+        assert 'CERTIFICATE' in str(ca_bundle.cert)
+
+        # create a cert and sign it with that CA
+        cert_name = 'bar'
+        cert_record = certipy.create_signed_pair(cert_name, ca_name)
+
+        non_empty_paths = [f for f in cert_record['files'].values() if f]
+        assert len(non_empty_paths) == 3
+        assert cert_record['files']['ca'] == ca_record['files']['cert']
