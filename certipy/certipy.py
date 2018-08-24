@@ -326,6 +326,7 @@ class CertStore():
             'files': files,
         }
         self.store[common_name] = record
+        self.save()
 
 
     def add_files(self, common_name, x509s, files=None, parent_ca='',
@@ -362,6 +363,7 @@ class CertStore():
             bundle = TLSFileBundle(common_name, files=files, x509s=x509s,
                 serial=serial, parent_ca=parent_ca, signees=signees)
             self.store[common_name] = bundle.to_record()
+        self.save()
 
     def add_sign_link(self, ca_name, signee_name):
         """Adds to the CA signees and a parent ref to the signee"""
@@ -374,6 +376,7 @@ class CertStore():
             signees[signee_name] = 1
             ca_record['signees'] = signees
             signee_record['parent_ca'] = ca_name
+        self.save()
 
 
     def remove_sign_link(self, ca_name, signee_name):
@@ -387,6 +390,7 @@ class CertStore():
             signees[signee_name] = 0
             ca_record['signees'] = signees
             signee_record['parent_ca'] = ''
+        self.save()
 
 
     def update_record(self, common_name, **fields):
@@ -396,6 +400,7 @@ class CertStore():
         if fields is not None:
             for field, value in fields:
                 record[field] = value
+        self.save()
         return record
 
 
@@ -411,6 +416,7 @@ class CertStore():
             )
         # TODO: delete the key and cert files
         del self.store[common_name]
+        self.save()
 
 class Certipy():
     def __init__(self, store_dir='out', store_file='certipy.json'):
@@ -564,7 +570,6 @@ class Certipy():
 
         x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
         self.store.add_files(name, x509s)
-        self.store.save()
         return self.store.get_record(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
@@ -603,5 +608,4 @@ class Certipy():
 
         # Relate these certs as being parent and child
         self.store.add_sign_link(ca_name, name)
-        self.store.save()
         return self.store.get_record(name)
