@@ -157,8 +157,8 @@ class TLSFile():
 class TLSFileBundle():
     """Maintains information that is shared by a set of TLSFiles"""
 
-    def __init__(self, common_name, files=None, serial=0, is_ca=False,
-            parent_ca='', signees=None):
+    def __init__(self, common_name, files=None, x509s=None, serial=0,
+            is_ca=False, parent_ca='', signees=None):
         self.serial = serial
         self.parent_ca = parent_ca
         self.signees = signees
@@ -166,7 +166,9 @@ class TLSFileBundle():
             setattr(self, t.value, None)
 
         files = files or {}
+        x509s = x509s or {}
         self._setup_tls_files(files)
+        self._save_x509s(x509s)
 
 
     def _setup_tls_files(self, files):
@@ -174,6 +176,25 @@ class TLSFileBundle():
             if t.value in files:
                 file_path = files[t.value]
                 setattr(self, t.value, TLSFile(file_path, file_type=t))
+
+
+    def _save_x509s(self, x509s):
+        """Saves the x509 objects to the paths known by this bundle"""
+
+        for file_type, x509 in x509s.items():
+            if x509:
+                if file_type is TLSFileType.CA and parent_ca:
+                    # point to the parent CA's cert
+                    ca_bundle = self.get_files(parent_ca)
+                    tlsfile = getattr(self, file_type)
+                    if tlsfile:
+                        tlsfile.file_path = ca_bundle.ca.file_path
+                elif file_type is not TLSFileType.CA:
+                    # persist this key or cert to disk
+                    tlsfile = getattr(self, file_type)
+                    if tlsfile:
+                        tlsfile.save(x509)
+
 
     def load_all(self):
         for t in TLSFileType:
@@ -290,35 +311,27 @@ class CertStore():
         if common_name in self.store and not overwrite:
             raise CertExistsError("Certificate {name} already exists!"
                 " Set overwrite=True to force add.".format(name=common_name))
-        file_base_tmpl = "{prefix}/{cn}/{cn}"
-        file_base = file_base_tmpl.format(
-            prefix=self.containing_dir, cn=common_name
-        )
-        ca_file = '' if not parent_ca else file_base_tmpl.format(
-            prefix=self.containing_dir, cn=parent_ca
-        ) + '.crt'
-        files = files or {
-            'key': file_base + '.key',
-            'cert': file_base + '.crt',
-            'ca': ca_file,
-        }
-        bundle = TLSFileBundle(common_name, files=files, serial=serial,
-            parent_ca=parent_ca, signees=signees)
-        for file_type, x509 in x509s.items():
-            if x509:
-                if file_type is TLSFileType.CA and parent_ca:
-                    # point to the parent CA's cert
-                    ca_bundle = self.get_files(parent_ca)
-                    tlsfile = getattr(bundle, file_type)
-                    if tlsfile:
-                        tlsfile.file_path = ca_bundle.ca.file_path
-                elif file_type is not TLSFileType.CA:
-                    # persist this key or cert to disk
-                    tlsfile = getattr(bundle, file_type)
-                    if tlsfile:
-                        tlsfile.save(x509)
-
-        self.store[common_name] = bundle.to_record()
+        elif common_name in self.store and overwrite:
+            # TODO: update and bump serial
+            pass
+        else:
+            file_base_tmpl = "{prefix}/{cn}/{cn}"
+            file_base = file_base_tmpl.format(
+                prefix=self.containing_dir, cn=common_name
+            )
+            # TODO: Look up the CA for this parent name and use its
+            # public cert path
+            ca_file = '' if not parent_ca else file_base_tmpl.format(
+                prefix=self.containing_dir, cn=parent_ca
+            ) + '.crt'
+            files = files or {
+                'key': file_base + '.key',
+                'cert': file_base + '.crt',
+                'ca': ca_file,
+            }
+            bundle = TLSFileBundle(common_name, files=files, x509s=x509s,
+                serial=serial, parent_ca=parent_ca, signees=signees)
+            self.store[common_name] = bundle.to_record()
 
     def add_sign_link(self, ca_name, signee_name):
         """Adds to the CA signees and a parent ref to the signee"""
