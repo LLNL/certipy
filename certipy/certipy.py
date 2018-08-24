@@ -71,17 +71,17 @@ class TLSFileType(Enum):
     CA = 'ca'
 
 class CertNotFoundError(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message, errors=None):
         super().__init__(message)
         self.errors = errors
 
 class CertExistsError(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message, errors=None):
         super().__init__(message)
         self.errors = errors
 
 class CertificateAuthorityInUseError(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message, errors=None):
         super().__init__(message)
         self.errors = errors
 
@@ -293,7 +293,7 @@ class CertStore():
             return record
         except KeyError as e:
             raise CertNotFoundError("Unable to find record of {name}"
-                .format(name=common_name), e)
+                .format(name=common_name), errors=e)
 
 
     def get_files(self, common_name):
@@ -332,7 +332,8 @@ class CertStore():
 
         if common_name in self.store and not overwrite:
             raise CertExistsError("Certificate {name} already exists!"
-                " Set overwrite=True to force add.".format(name=common_name))
+                " Set overwrite=True to force add."
+                .format(name=common_name))
         elif common_name in self.store and overwrite:
             # TODO: update and bump serial
             pass
