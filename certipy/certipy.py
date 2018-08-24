@@ -410,8 +410,8 @@ class CertStore():
         del self.store[common_name]
 
 class Certipy():
-    def __init__(self, store_dir='out'):
-        self.store = CertStore(store_dir=store_dir)
+    def __init__(self, store_dir='out', store_file='certipy.json'):
+        self.store = CertStore(containing_dir=store_dir, store_file=store_file)
 
     def create_key_pair(self, cert_type, bits):
         """
