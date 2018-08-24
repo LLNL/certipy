@@ -263,13 +263,14 @@ class CertStore():
     def __init__(self, containing_dir='out', store_file='certipy.json'):
         self.store = {}
         self.containing_dir = containing_dir
+        self.store_file_path = os.path.join(containing_dir, store_file)
         try:
             os.stat(containing_dir)
+            self.load()
         except FileNotFoundError:
             os.makedirs(containing_dir, mode=0o755, exist_ok=True)
         finally:
             os.chmod(containing_dir, mode=0o755)
-        self.store_file_path = os.path.join(containing_dir, store_file)
 
     def save(self):
         """Write the store dict to a file specified by store_file_path"""
