@@ -63,7 +63,6 @@ import argparse
 import logging
 from enum import Enum
 from OpenSSL import crypto
-from collections import namedtuple
 from contextlib import contextmanager
 
 class TLSFileType(Enum):
