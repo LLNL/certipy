@@ -216,6 +216,7 @@ def test_certipy_store(signed_key_pair, record):
         assert signee_record['parent_ca'] == common_name
 
 def test_certipy():
+    # FIXME: unfortunately similar names...either separate tests or rename
     with TemporaryDirectory() as td:
         # create a CA
         ca_name = 'foo'
@@ -239,3 +240,29 @@ def test_certipy():
         non_empty_paths = [f for f in cert_record['files'].values() if f]
         assert len(non_empty_paths) == 3
         assert cert_record['files']['ca'] == ca_record['files']['cert']
+
+        # add a second CA
+        ca_name1 = 'baz'
+        certipy.create_ca(ca_name1)
+
+        # create a bundle from all known certs
+        bundle_file_name = 'bundle.crt'
+        bundle_file = certipy.create_ca_bundle(bundle_file_name)
+        ca_bundle1 = certipy.store.get_files(ca_name1)
+        ca_bundle1.cert.load()
+        assert bundle_file is not None
+        with open(bundle_file, 'r') as fh:
+            all_certs = fh.read()
+
+            # should contain both CA certs
+            assert str(ca_bundle.cert) in all_certs
+            assert str(ca_bundle1.cert) in all_certs
+
+        # bundle of CA certs for only a single name this time
+        bundle_file = certipy.create_ca_bundle_for_names(bundle_file_name,
+                ['bar'])
+        assert bundle_file is not None
+        with open(bundle_file, 'r') as fh:
+            all_certs = fh.read()
+            assert str(ca_bundle.cert) in all_certs
+            assert str(ca_bundle1.cert) not in all_certs

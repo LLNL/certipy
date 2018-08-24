@@ -504,7 +504,16 @@ class Certipy():
 
         return cert
 
-    def create_ca_bundle(self, ca_names, bundle_name):
+    def create_ca_bundle_for_names(self, bundle_name, names):
+        """Create a CA bundle to trust only certs defined in names
+        """
+
+        records = [rec for name, rec
+                in self.store.store.items() if name in names]
+        return self.create_ca_bundle(bundle_name,
+            ca_names=[r['parent_ca'] for r in records])
+
+    def create_ca_bundle(self, bundle_name, ca_names=None):
         """
         Create a bundle of CA public certs for trust distribution
 
@@ -512,26 +521,20 @@ class Certipy():
                    bundle_name - The name of the bundle file to output
         Returns:   Path to the bundle file
         """
-        ca_certs = []
-        for name in ca_names:
-            cert = self.load_key_cert_pair(name)[1]
-            if cert:
-                ca_certs.append(cert)
+        if not ca_names:
+            ca_names = []
+            for name, record in self.store.store.items():
+                if not record['parent_ca']:
+                    ca_names.append(name)
 
-        bundle = "".join(
-                    [crypto.dump_certificate(crypto.FILETYPE_PEM, cert)\
-                        .decode("utf-8") for cert in ca_certs]
-                 )
-        file_path = "{out}/{name}.crt".format(out=self.store_dir,
-                name=bundle_name)
-        try:
-            with open(file_path, 'w') as fh:
-                fh.write(bundle)
-            os.chmod(file_path, 0o644)
-            return file_path
-        except FileNotFoundError as err:
-            self.log.warn("Could not open {} for writing:".format(file_path),
-                    err)
+        out_file_path = os.path.join(self.store.containing_dir, bundle_name)
+        with open(out_file_path, 'w') as fh:
+            for name in ca_names:
+                bundle = self.store.get_files(name)
+                bundle.cert.load()
+                fh.write(str(bundle.cert))
+        return out_file_path
+
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
             alt_names=b"", years=5, serial=0):
