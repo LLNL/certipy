@@ -71,6 +71,11 @@ class TLSFileType(Enum):
     CERT = 'cert'
     CA = 'ca'
 
+class CertExistsError(Exception):
+    def __init__(self, message, errors):
+        super().__init__(message)
+        self.errors = errors
+
 @contextmanager
 def open_tls_file(file_path, mode, private=True):
     """Context to ensure correct file permissions for certs and directories
@@ -101,7 +106,6 @@ def open_tls_file(file_path, mode, private=True):
 
 class TLSFile():
     """Describes basic information about files used for TLS"""
-KeyCertPair = namedtuple("KeyCertPair", "name dir_name key_file cert_file ca_file")
 
     def __init__(self, file_path, encoding=crypto.FILETYPE_PEM,
             file_type=TLSFileType.CERT, x509=None):
@@ -110,48 +114,12 @@ KeyCertPair = namedtuple("KeyCertPair", "name dir_name key_file cert_file ca_fil
         self.encoding = encoding
         self.file_type = file_type
         self.x509 = x509
-class Certipy():
-    def __init__(self, store_dir="out", record_file="store.json",
-            log_file=None, log_level=logging.WARN):
-        """
-        Init the class
 
-        Arguments: store_dir   - The base path to use for the store
-                   record_file - The name of the file to write store info
-        Returns:   None
-        """
-        self.certs = {}
-        self.store_dir = store_dir
-        self.record_file = record_file
-        self.serial = 0
-        logging.basicConfig(filename=log_file, level=log_level)
-        self.log = logging.getLogger('Certipy')
-        self._load()
-
-    def _save(self):
-        """
-        Save a JSON file detailing certs known by certipy
 
     def __str__(self):
         data = ''
         if not self.x509:
             return data
-        Arguments: None
-        Returns:   None
-        """
-        file_path = "{}/{}".format(self.store_dir, self.record_file)
-        try:
-            with open(file_path, 'w') as fh:
-                out = {}
-                out['serial'] = self.serial
-                out['cert_info'] = self.certs
-                fh.write(json.dumps(out))
-        except FileNotFoundError:
-            self.log.warn("Could not open file {} for writing.".format(file_path))
-
-    def _load(self):
-        """
-        Load a JSON file detailing certs known by certipy
 
         if self.file_type is TLSFileType.KEY:
             data = crypto.dump_privatekey(self.encoding,
@@ -159,67 +127,9 @@ class Certipy():
         else:
             data = crypto.dump_certificate(self.encoding,
                 self.x509).decode("utf-8")
-        Arguments: None
-        Returns:   None
-        """
-        file_path = "{}/{}".format(self.store_dir, self.record_file)
-        try:
-            with open(file_path) as fh:
-                store = json.load(fh)
-                self.serial = store['serial']
-                cert_info = store['cert_info']
-                for name, info in cert_info.items():
-                    self.certs[name] = KeyCertPair(*info)
-
-        except FileNotFoundError:
-            self.log.info("No store file at {}. Creating a new one.".format(file_path))
-            os.makedirs(self.store_dir, mode=0o755,  exist_ok=True)
-            os.chmod(self.store_dir, 0o755)
-        except TypeError as err:
-            self.log.warn("Problems loading store:", err)
-        except ValueError as err:
-            self.log.warn("Problems loading store:", err)
-
-    def get(self, name):
-        """
-        Get info about a cert in the store
 
         return data
-        Arguments: name - The name of the cert to find
-        Returns:   KeyCertPair object with location info
-        """
-        try:
-            info = self.certs[name]
-            dir_name = os.path.abspath(info.dir_name)
-            cert_file = os.path.abspath(info.cert_file)
-            key_file = os.path.abspath(info.key_file)
-            ca_file = os.path.abspath(info.ca_file)
-            info_copy = KeyCertPair(info.name, dir_name, key_file, cert_file, ca_file)
 
-            return info_copy
-        except KeyError:
-            self.log.warn("No certificates found with name {}".format(name))
-
-    def key_cert_pair_for_name(self, name, dir_name="", key_file="", cert_file="", ca_file=""):
-        if not dir_name:
-            dir_name = "{}/{}".format(self.store_dir, name)
-        if not key_file:
-            key_file = "{0}/{1}.key".format(dir_name, name)
-        if not cert_file:
-            cert_file = "{0}/{1}.crt".format(dir_name, name)
-        if not ca_file:
-            ca_file = cert_file
-        return KeyCertPair(name, dir_name, key_file, cert_file, ca_file)
-
-    def add(self, keyCertPair):
-        """
-        Add a cert reference to the store
-
-        Arguments: keyCerPair - The KeyCertPair object to add
-        Returns:   None
-        """
-        self.certs[keyCertPair.name] = keyCertPair
-        self._save()
 
     def is_private(self):
         return True if self.file_type is TLSFileType.KEY else False
@@ -230,12 +140,10 @@ class Certipy():
         private = self.is_private()
         with open_tls_file(self.file_path, 'r', private=private) as fh:
             if private:
-                return crypto.load_privatekey(self.encoding, fh.read())
+                self.x509 = crypto.load_privatekey(self.encoding, fh.read())
             else:
-                return crypto.load_certificate(self.encoding, fh.read())
-    def remove(self, name):
-        """
-        Remove a cert reference from the store
+                self.x509 = crypto.load_certificate(self.encoding, fh.read())
+            return self.x509
 
 
     def save(self, x509):
@@ -245,14 +153,7 @@ class Certipy():
         with open_tls_file(self.file_path, 'w',
                 private=self.is_private()) as fh:
             fh.write(str(self))
-        Arguments: name - The name of the cert
-        Returns:   None
-        """
-        try:
-            del self.certs[name]
-            self._save()
-        except KeyError:
-            self.log.warn("No certificates found with name {}".format(name))
+
 class TLSFileBundle():
     """Maintains information that is shared by a set of TLSFiles"""
 
@@ -269,8 +170,10 @@ class TLSFileBundle():
 
 
     def _setup_tls_files(self, files):
-        for file_type, file_path in files.items():
-            setattr(self, file_type, TLSFile(file_path, file_type=file_type))
+        for t in TLSFileType:
+            if t.value in files:
+                file_path = files[t.value]
+                setattr(self, t.value, TLSFile(file_path, file_type=t))
 
     def load_all(self):
         for t in TLSFileType:
@@ -281,16 +184,22 @@ class TLSFileBundle():
         return bool(self.parent_ca)
 
     def to_record(self):
+        """Create a CertStore record from this TLSFileBundle"""
+
         tf_list = [getattr(self, k, None) for k in
                 [_.value for _ in TLSFileType]]
+        # If a cert isn't defined in this bundle, remove it
+        tf_list = filter(lambda x: x, tf_list)
         return {
             'serial': self.serial,
             'parent_ca': self.parent_ca,
             'signees': self.signees,
-            'files': {tf.file_type: tf.file_path for tf in tf_list},
+            'files': {tf.file_type.value: tf.file_path for tf in tf_list},
         }
 
     def from_record(self, record):
+        """Build a bundle from a CertStore record"""
+
         self.serial = record['serial']
         self.parent_ca = record['parent_ca']
         self.signees = record['signees']
@@ -458,6 +367,10 @@ class CertStore():
         # TODO: delete the key and cert files
         del self.store[common_name]
 
+class Certipy():
+    def __init__(self, store_dir='out'):
+        self.store = CertStore(store_dir=store_dir)
+
     def create_key_pair(self, cert_type, bits):
         """
         Create a public/private key pair.
@@ -506,7 +419,7 @@ class CertStore():
         return req
 
     def sign(self, req, issuer_cert_key, validity_period, digest="sha256",
-            extensions=None):
+            extensions=None, serial=0):
         """
         Generate a certificate given a certificate request.
 
@@ -523,14 +436,12 @@ class CertStore():
         issuer_cert, issuer_key = issuer_cert_key
         not_before, not_after = validity_period
         cert = crypto.X509()
-        cert.set_serial_number(self.serial)
+        cert.set_serial_number(serial)
         cert.gmtime_adj_notBefore(not_before)
         cert.gmtime_adj_notAfter(not_after)
         cert.set_issuer(issuer_cert.get_subject())
         cert.set_subject(req.get_subject())
         cert.set_pubkey(req.get_pubkey())
-
-        self.serial += 1
 
         if extensions:
             for ext in extensions:
@@ -541,63 +452,6 @@ class CertStore():
         cert.sign(issuer_key, digest)
 
         return cert
-
-    def write_key_cert_pair(self, name, key, cert, signing_cert=''):
-        """
-        Write a key cert pair to individual files.
-
-        Arguments: name - The name of the key-cert pair
-                   key  - The X509 object key
-                   cert - The X509 object cert
-        Returns:   None
-        """
-        try:
-            cert_info = self.key_cert_pair_for_name(name, ca_file=signing_cert)
-            os.makedirs(cert_info.dir_name, mode=0o755,  exist_ok=True)
-
-            # Explicitly set this in case umask has other ideas
-            os.chmod(cert_info.dir_name, 0o755)
-            with open(cert_info.key_file, 'w') as fh:
-                fh.write(
-                    crypto.dump_privatekey(crypto.FILETYPE_PEM, key)
-                        .decode("utf-8")
-                )
-
-            with open(cert_info.cert_file, 'w') as fh:
-                fh.write(
-                    crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
-                        .decode("utf-8")
-                )
-
-            os.chmod(cert_info.key_file, 0o600)
-            os.chmod(cert_info.cert_file, 0o644)
-
-            self.add(cert_info)
-            self._save()
-            return cert_info
-
-        except FileNotFoundError as err:
-            self.log.warn("Could not write file:", err)
-
-    def load_key_cert_pair(self, name):
-        """
-        Load a key cert pair to individual X509 objects
-
-        Arguments: name - The name of the key-cert pair
-        Returns:   (key, cert) tuple of X509 objects
-        """
-        key = None
-        cert = None
-        try:
-            cert_info = self.get(name)
-            with open(cert_info.key_file) as fh:
-                key = crypto.load_privatekey(crypto.FILETYPE_PEM, fh.read())
-            with open(cert_info.cert_file) as fh:
-                cert = crypto.load_certificate(crypto.FILETYPE_PEM, fh.read())
-            return (key, cert)
-        except FileNotFoundError as err:
-            self.log.warn("Could not load file:", err)
-            raise
 
     def create_ca_bundle(self, ca_names, bundle_name):
         """
@@ -629,7 +483,7 @@ class CertStore():
                     err)
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
-            alt_names=b"", years=5):
+            alt_names=b"", years=5, serial=0):
         """
         Create a self-signed certificate authority
 
@@ -659,14 +513,20 @@ class CertStore():
                 crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
+        # TODO: start time before today for clock skew?
         cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 
-        self.write_key_cert_pair(name, cakey, cacert)
+        x509s = {
+            key: cakey,
+            cert: cacert,
+            ca: cacert,
+        }
+        self.store.add_files(name, x509s)
         return self.get(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
-            bits=2048, years=5, alt_names=b""):
+            bits=2048, years=5, alt_names=b"", serial=0):
         """
         Create a key-cert pair
 
@@ -689,7 +549,7 @@ class CertStore():
                 crypto.X509Extension(b"subjectAltName", False, alt_names)
             )
 
-        cakey, cacert = self.load_key_cert_pair(ca_name)
+        cakey, cacert = self.store.get_files(ca_name)
         cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*years),
                 extensions=extensions)
 

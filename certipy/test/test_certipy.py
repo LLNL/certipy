@@ -170,115 +170,48 @@ def test_tls_file_bundle(signed_key_pair, record):
     assert len(f_types) == 3
     assert f_types == {'key', 'cert', 'ca'}
 
-def test_key_cert_pair_for_name():
+def test_certipy_store(signed_key_pair, record):
+    key, cert = signed_key_pair
+    key_str = crypto.dump_privatekey(crypto.FILETYPE_PEM, key)\
+                .decode('utf-8')
+    cert_str = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)\
+                .decode('utf-8')
     with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        test_path = "{}/{}".format(td, name)
-        cert_info = c.key_cert_pair_for_name(name)
+        common_name = 'foo'
+        store = CertStore(containing_dir=td)
+        # add files
+        x509s = {
+            'key': key,
+            'cert': cert,
+            'ca': None,
+        }
+        store.add_files(common_name, x509s)
 
-        assert cert_info.dir_name == test_path
+        # check the TLSFiles
+        bundle = store.get_files(common_name)
+        bundle.key.load()
+        bundle.cert.load()
+        assert key_str == str(bundle.key)
+        assert cert_str == str(bundle.cert)
 
-def test_store_add():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        cert_info = c.key_cert_pair_for_name(name)
-        c.add(cert_info)
+        # save the store records to a file
+        store.save()
 
-        assert name in c.certs
+        # read the records back in
+        store.load()
 
-def test_store_get():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        cert_info = c.key_cert_pair_for_name(name)
-        c.add(cert_info)
+        # check the record for those files
+        main_record = store.get_record(common_name)
+        non_empty_paths = [f for f in main_record['files'].values() if f]
+        assert len(non_empty_paths) == 2
 
-        loadedInfo = c.get(name)
+        # add another record with no physical files
+        signee_common_name = 'bar'
+        store.add_record(signee_common_name, record=record)
 
-        assert loadedInfo.key_file == "{}/{}.key".format(cert_info.dir_name, name)
-        assert loadedInfo.cert_file == "{}/{}.crt".format(cert_info.dir_name, name)
+        # 'sign' cert
+        store.add_sign_link(common_name, signee_common_name)
+        signee_record = store.get_record(signee_common_name)
+        assert len(main_record['signees']) == 1
+        assert signee_record['parent_ca'] == common_name
 
-def test_store_remove():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        cert_info = c.key_cert_pair_for_name(name)
-        c.add(cert_info)
-        cert_info = c.get(name)
-
-        assert cert_info is not None
-
-        c.remove(name)
-        cert_info = c.get(name)
-
-        assert cert_info is None
-
-def test_store_save():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        cert_info = c.key_cert_pair_for_name(name)
-        c.add(cert_info)
-
-        assert os.stat("{}/store.json".format(td))
-
-def test_store_load():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        cert_info = c.key_cert_pair_for_name(name)
-        c.add(cert_info)
-
-        loadedInfo = c.get(name)
-
-        assert loadedInfo.key_file == "{}/{}.key".format(cert_info.dir_name, name)
-        assert loadedInfo.cert_file == "{}/{}.crt".format(cert_info.dir_name, name)
-
-def test_create_ca():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        cert_info = c.create_ca(name)
-
-        assert os.stat(cert_info.key_file)
-        assert os.stat(cert_info.cert_file)
-
-def test_create_ca_bundle():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name1 = "foo"
-        name2 = "bar"
-        cert_info1 = c.create_ca(name1)
-        cert_info2 = c.create_ca(name2)
-        bundle_file = c.create_ca_bundle([name1, name2], 'bundle')
-        with open(bundle_file) as bundle_handle,\
-             open(cert_info1.cert_file) as cert1_handle,\
-             open(cert_info2.cert_file) as cert2_handle:
-            bundle = bundle_handle.read()
-            cert1 = cert1_handle.read()
-            cert2 = cert2_handle.read()
-            assert cert1 in bundle
-            assert cert2 in bundle
-
-def test_create_key_pair():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        name = "foo"
-        ca_name = "bar"
-        c.create_ca(ca_name)
-        cert_info = c.create_signed_pair(name, ca_name)
-
-        assert os.stat(cert_info.key_file)
-        assert os.stat(cert_info.cert_file)
-
-def test_increment_serial():
-    with TemporaryDirectory() as td:
-        c = Certipy(store_dir=td)
-        ca_name = "bar"
-        c.create_ca(ca_name)
-        for name in ['foo', 'bar', 'baz']:
-            cert_info = c.create_signed_pair(name, ca_name)
-
-        assert c.serial == 4
