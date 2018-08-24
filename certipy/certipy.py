@@ -195,17 +195,12 @@ class TLSFileBundle():
     def _save_x509s(self, x509s):
         """Saves the x509 objects to the paths known by this bundle"""
 
-        for file_type, x509 in x509s.items():
-            if x509:
-                if file_type is TLSFileType.CA and parent_ca:
-                    # point to the parent CA's cert
-                    ca_bundle = self.get_files(parent_ca)
-                    tlsfile = getattr(self, file_type)
-                    if tlsfile:
-                        tlsfile.file_path = ca_bundle.ca.file_path
-                elif file_type is not TLSFileType.CA:
+        for file_type in TLSFileType:
+            if file_type.value in x509s:
+                x509 = x509s[file_type.value]
+                if file_type is not TLSFileType.CA:
                     # persist this key or cert to disk
-                    tlsfile = getattr(self, file_type)
+                    tlsfile = getattr(self, file_type.value)
                     if tlsfile:
                         tlsfile.save(x509)
 
