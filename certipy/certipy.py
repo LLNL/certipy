@@ -297,6 +297,167 @@ class TLSFileBundle():
         self._setup_tls_files(record['files'])
         return self
 
+class CertStore():
+    """Maintains records of certificates created by Certipy
+
+    Minimally, each record keyed by common name needs:
+        - file
+            - path
+            - type
+        - serial number
+        - parent CA
+        - signees
+    Common names, for the sake of simplicity, are assumed to be unique.
+    If a pair of certs need to be valid for the same IP/DNS address (ex:
+    localhost), that information can be specified in the Subject Alternative
+    Name field.
+    """
+
+    def __init__(self, containing_dir='out', store_file='certipy.json'):
+        self.store = {}
+        self.containing_dir = containing_dir
+        self.store_file = store_file
+        self.store_file_path = "{}/{}".format(containing_dir, store_file)
+
+
+    def save(self):
+        """Write the store dict to a file specified by store_file_path"""
+
+        with open(self.store_file_path, 'w') as fh:
+            fh.write(json.dumps(self.store, indent=4))
+
+
+    def load(self):
+        """Read the store dict from file"""
+
+        with open(self.store_file_path, 'r') as fh:
+            self.store = json.loads(fh.read())
+
+
+    def get_record(self, common_name):
+        """Return the record associated with this common name
+
+        In most cases, all that's really needed to use an existing cert are
+        the file paths to the files that make up that cert. This method
+        returns just that and doesn't bother loading the associated files.
+        """
+        return self.store[common_name]
+
+
+    def get_files(self, common_name):
+        """Return a bundle of TLS files associated with a common name"""
+
+        record = self.store[common_name]
+        return TLSFileBundle(common_name).from_record(record)
+
+
+    def add_record(self, common_name, serial=0, parent_ca='',
+        signees=None, files=None, record=None):
+        """Manually create a record of certs
+
+        Generally, Certipy can be left to manage certificate locations and
+        storage, but it is occasionally useful to keep track of a set of
+        certs that were created externally (for example, let's encrypt)
+        """
+
+        record = record or {
+            'serial': serial,
+            'parent_ca': parent_ca,
+            'signees': signees,
+            'files': files,
+        }
+        self.store[common_name] = record
+
+
+    def add_files(self, common_name, x509s, files=None, parent_ca='',
+            signees=None, serial=0, overwrite=False):
+        """Add a set files comprising a certificate to Certipy
+
+        Used with all the defaults, Certipy will manage creation of file paths
+        to be used to store these files to disk and automatically calls save
+        on all TLSFiles that it creates (and where it makes sense to).
+        """
+
+        if common_name in self.store and not overwrite:
+            raise CertExistsError("Certificate {name} already exists!"
+                " Set overwrite=True to force add.".format(name=common_name))
+        file_base_tmpl = "{prefix}/{cn}/{cn}"
+        file_base = file_base_tmpl.format(
+            prefix=self.containing_dir, cn=common_name
+        )
+        ca_file = '' if not parent_ca else file_base_tmpl.format(
+            prefix=self.containing_dir, cn=parent_ca
+        ) + '.crt'
+        files = files or {
+            'key': file_base + '.key',
+            'cert': file_base + '.crt',
+            'ca': ca_file,
+        }
+        bundle = TLSFileBundle(common_name, files=files, serial=serial,
+            parent_ca=parent_ca, signees=signees)
+        for file_type, x509 in x509s.items():
+            if x509:
+                if file_type is TLSFileType.CA and parent_ca:
+                    # point to the parent CA's cert
+                    ca_bundle = self.get_files(parent_ca)
+                    tlsfile = getattr(bundle, file_type)
+                    if tlsfile:
+                        tlsfile.file_path = ca_bundle.ca.file_path
+                elif file_type is not TLSFileType.CA:
+                    # persist this key or cert to disk
+                    tlsfile = getattr(bundle, file_type)
+                    if tlsfile:
+                        tlsfile.save(x509)
+
+        self.store[common_name] = bundle.to_record()
+
+    def add_sign_link(self, ca_name, signee_name):
+        """Adds to the CA signees and a parent ref to the signee"""
+
+        ca_record = self.get_record(ca_name)
+        signee_record = self.get_record(signee_name)
+        signees = ca_record['signees'] or []
+        if signee_name not in signees:
+            signees.append(signee_name)
+            ca_record['signees'] = signees
+            signee_record['parent_ca'] = ca_name
+
+
+    def remove_sign_link(self, ca_name, signee_name):
+        """Removes signee_name to the signee list for ca_name"""
+
+        ca_record = self.get_record(ca_name)
+        signee_record = self.get_record(signee_name)
+        signees = ca_record['signees'] or []
+        if signee_name in signees:
+            signees.remove(signee_name)
+            ca_record['signees'] = signees
+            signee_record['parent_ca'] = ''
+
+
+    def update_record(self, common_name, **fields):
+        """Update fields in an existing record"""
+
+        record = self.get_record(common_name)
+        if fields is not None:
+            for field, value in fields:
+                record[field] = value
+        return record
+
+
+    def remove_files(self, common_name):
+        """Delete files and record associated with this common name"""
+
+        bundle = self.get_files(common_name)
+        num_signees = len(bundle.signees)
+        if bundle.is_ca() and num_signees > 0:
+            raise CertificateAuthorityInUseError(
+                "Authority {name} has signed {x} certificates"
+                    .format(name=common_name, x=num_signees)
+            )
+        # TODO: delete the key and cert files
+        del self.store[common_name]
+
     def create_key_pair(self, cert_type, bits):
         """
         Create a public/private key pair.
