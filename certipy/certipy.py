@@ -185,7 +185,7 @@ class TLSFileBundle():
         files = files or {}
         x509s = x509s or {}
         self._setup_tls_files(files)
-        self._save_x509s(x509s)
+        self.save_x509s(x509s)
 
     def _setup_tls_files(self, files):
         """Initiates TLSFIle objects with the paths given to this bundle"""
@@ -196,7 +196,7 @@ class TLSFileBundle():
                 setattr(self, file_type.value,
                         TLSFile(file_path, file_type=file_type))
 
-    def _save_x509s(self, x509s):
+    def save_x509s(self, x509s):
         """Saves the x509 objects to the paths known by this bundle"""
 
         for file_type in TLSFileType:
@@ -339,8 +339,10 @@ class CertStore():
                 " Set overwrite=True to force add."
                 .format(name=common_name))
         elif common_name in self.store and overwrite:
-            # TODO: update and bump serial
-            pass
+            record = self.get_record(common_name)
+            serial = int(record['serial'])
+            record['serial'] = serial + 1
+            TLSFileBundle(common_name).from_record(record).save_x509s(x509s)
         else:
             file_base_tmpl = "{prefix}/{cn}/{cn}"
             file_base = file_base_tmpl.format(
@@ -537,7 +539,7 @@ class Certipy():
         return out_file_path
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
-                  alt_names=b"", years=5, serial=0):
+                  alt_names=b"", years=5, serial=0, overwrite=False):
         """
         Create a self-signed certificate authority
 
@@ -574,11 +576,12 @@ class Certipy():
                            extensions=extensions)
 
         x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
-        self.store.add_files(name, x509s)
+        self.store.add_files(name, x509s, overwrite=overwrite)
         return self.store.get_record(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
-                           bits=2048, years=5, alt_names=b"", serial=0):
+                           bits=2048, years=5, alt_names=b"", serial=0,
+                           overwrite=False):
         """
         Create a key-cert pair
 
@@ -610,7 +613,8 @@ class Certipy():
                          extensions=extensions)
 
         x509s = {'key': key, 'cert': cert, 'ca': None}
-        self.store.add_files(name, x509s, parent_ca=ca_name)
+        self.store.add_files(name, x509s, parent_ca=ca_name,
+                             overwrite=overwrite)
 
         # Relate these certs as being parent and child
         self.store.add_sign_link(ca_name, name)
