@@ -62,7 +62,9 @@ import argparse
 import shutil
 import sys
 from OpenSSL import crypto
-from certipy import Certipy, CertExistsError, CertNotFoundError
+from certipy import (
+    Certipy, CertExistsError, CertNotFoundError, CertificateAuthorityInUseError
+)
 
 def main():
     describe_certipy = """
@@ -101,20 +103,16 @@ def main():
     record = None
 
     if args.rm:
-        # TODO: Finish implementation
-        print("Not implemented yet")
-        sys.exit(0)
-        record = certipy.store.get_record(args.name)
-        if record:
-            for f in record['files']:
-                shutil.rm(f)
-            cert_store.remove(args.name)
-        else:
-            print("Unable to remove cert with name {}.".format(args.name))
+        try:
+            record = certipy.store.remove_files(args.name, delete_dir=True)
+            print("Deleted:")
+            for key, val in record.items():
+                print(key.upper(), val)
+        except CertificateAuthorityInUseError as e:
+            print("Unable to delete.", e)
         sys.exit(0)
 
     if args.ca_name:
-        print('creating key pair')
         ca_record = certipy.store.get_record(args.ca_name)
         if ca_record:
             try:

@@ -267,3 +267,11 @@ def test_certipy():
             all_certs = fh.read()
             assert str(ca_bundle.cert) in all_certs
             assert str(ca_bundle1.cert) not in all_certs
+
+        # delete certs
+        deleted_record = certipy.store.remove_files('bar', delete_dir=True)
+        assert not os.path.exists(deleted_record['files']['cert'])
+        assert not os.path.exists(deleted_record['files']['key'])
+
+        # the CA cert should still be around, we have to delete that explicitly
+        assert os.path.exists(deleted_record['files']['ca'])

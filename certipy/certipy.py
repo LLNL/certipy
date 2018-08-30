@@ -62,6 +62,7 @@ import os
 import json
 import argparse
 import logging
+import shutil
 from enum import Enum
 from collections import Counter
 from OpenSSL import crypto
@@ -218,7 +219,7 @@ class TLSFileBundle():
     def is_ca(self):
         """Is this bundle for a CA certificate"""
 
-        return bool(self.parent_ca)
+        return not self.parent_ca
 
     def to_record(self):
         """Create a CertStore record from this TLSFileBundle"""
@@ -400,8 +401,8 @@ class CertStore():
         self.save()
         return record
 
-    def remove_files(self, common_name):
-        """Delete files and record associated with this common name"""
+    def remove_record(self, common_name):
+        """Delete the record associated with this common name"""
 
         bundle = self.get_files(common_name)
         num_signees = len(Counter(bundle.signees))
@@ -410,9 +411,33 @@ class CertStore():
                 "Authority {name} has signed {x} certificates"
                 .format(name=common_name, x=num_signees)
             )
-        # TODO: delete the key and cert files
+        elif not bundle.is_ca():
+            try:
+                ca_name = bundle.parent_ca
+                ca_record = self.get_record(ca_name)
+                self.remove_sign_link(ca_name, common_name)
+            except CertNotFoundError:
+                pass
+        record_copy = dict(self.store[common_name])
         del self.store[common_name]
         self.save()
+        return record_copy
+
+    def remove_files(self, common_name, delete_dir=False):
+        """Delete files and record associated with this common name"""
+
+        record = self.remove_record(common_name)
+        if delete_dir:
+            delete_dirs = []
+            if 'files' in record:
+                key_containing_dir = os.path.dirname(record['files']['key'])
+                delete_dirs.append(key_containing_dir)
+                cert_containing_dir = os.path.dirname(record['files']['cert'])
+                if key_containing_dir != cert_containing_dir:
+                    delete_dirs.append(cert_containing_dir)
+                for d in delete_dirs:
+                    shutil.rmtree(d)
+        return record
 
 
 class Certipy():
