@@ -1,6 +1,18 @@
 # Certipy
 
-A simple python tool for creating certificate authorities and certificates on the fly.
+A simple python tool for creating certificate authorities and certificates on
+the fly.
+
+## Introduction
+
+Certipy was made to simplify the certificate creation process. To that end,
+Certipy exposes methods for creating and managing certificate authorities,
+certificates, signing and building trust bundles. Behind the scenes Certipy:
+
+* Manages records of all certificates it creates
+  * External certs can be imported and managed by Certipy
+  * Maintains signing hierarchy
+* Persists certificates to files with appropriate permissions
 
 ## Usage
 
@@ -8,18 +20,36 @@ A simple python tool for creating certificate authorities and certificates on th
 
 Creating a certificate authority:
 
-Certipy defaults to writing certs and store.json into a folder called `out` in your current directory.
+Certipy defaults to writing certs and certipy.json into a folder called `out`
+in your current directory.
 
 ```
 $ certipy foo
-No store file at out/store.json. Creating a new one.
-KeyCertPair(name='foo', dir_name='/tmp/out/foo', key_file='/tmp/out/foo/foo.key', cert_file='/tmp/out/foo/foo.crt', ca_file='/tmp/out/foo/foo.crt')
+FILES {'ca': '', 'cert': 'out/foo/foo.crt', 'key': 'out/foo/foo.key'}
+SERIAL 0
+SIGNEES None
+PARENT_CA
 ```
 
-Creating and signing a key cert pair:
+Creating and signing a key-cert pair:
+
 ```
 $ certipy bar --ca-name foo
-KeyCertPair(name='bar', dir_name='/tmp/out/bar', key_file='/tmp/out/bar/bar.key', cert_file='/tmp/out/bar/bar.crt', ca_file='/tmp/out/foo/foo.crt')
+FILES {'ca': 'out/foo/foo.crt', 'key': 'out/bar/bar.key', 'cert': 'out/bar/bar.crt'}
+SERIAL 0
+SIGNEES None
+PARENT_CA foo
+```
+
+Removal:
+
+```
+certipy --rm bar
+Deleted:
+FILES {'ca': 'out/foo/foo.crt', 'key': 'out/bar/bar.key', 'cert': 'out/bar/bar.crt'}
+SERIAL 0
+SIGNEES None
+PARENT_CA foo
 ```
 
 ### Code
@@ -29,20 +59,60 @@ Creating a certificate authority:
 ```
 from certipy import Certipy
 
-store = Certipy(store_dir='/tmp')
-store.create_ca('foo')
-cert_info = store.get('foo') # KeyCertPair
+certipy = Certipy(store_dir='/tmp')
+certipy.create_ca('foo')
+record = certipy.get_record('foo')
 ```
 
-Creating and signing a key cert pair:
+Creating and signing a key-cert pair:
 
 ```
-from certipy import Certipy
-
-store = Certipy(store_dir='/tmp')
-store.create_signed_pair('bar', 'foo')
-cert_info = store.get('bar') # KeyCertPair
+certipy.create_signed_pair('bar', 'foo')
+record = certipy.get_record('bar')
 ```
+
+Creating trust:
+
+```
+certipy.create_ca_bundle('ca-bundle.crt')
+
+# or to trust specific certs only:
+certipy.create_ca_bundle_for_names('ca-bundle.crt', ['bar'])
+```
+
+Removal:
+
+```
+record = certipy.remove_files('bar')
+```
+
+Records are dicts with the following structure:
+
+```
+{
+  'serial': 0,
+  'parent_ca': 'ca_name',
+  'signees': {
+    'signee_name': 1
+  },
+  'files': {
+    'key': 'path/to/key.key',
+    'cert': 'path/to/cert.crt',
+    'ca': 'path/to/ca.crt',
+  }
+}
+```
+
+The `parent_ca` field will be empty if the certificate is itself a CA.
+Likewise, `signees` will be empty for non-CA certificates. The `signees` field
+is stored as a python `Counter`. These relationships are used to build trust
+bundles.
+
+Information in Certipy is generally passed around as records which point to
+actual files. For most `_record` methods, there are generally equivalent
+`_file` methods that operate on files themselves. The former will only affect
+records in Certipy's store and the latter will affect both (something happens
+to the file, the record for it should change, too).
 
 ### Release
 
