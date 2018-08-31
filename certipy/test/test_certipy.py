@@ -236,11 +236,27 @@ def test_certipy():
 
         # create a cert and sign it with that CA
         cert_name = 'bar'
-        cert_record = certipy.create_signed_pair(cert_name, ca_name)
+        alt_names = ['DNS:bar.example.com', 'IP:10.10.10.10']
+        cert_record = certipy.create_signed_pair(
+                cert_name, ca_name, alt_names=alt_names)
 
         non_empty_paths = [f for f in cert_record['files'].values() if f]
         assert len(non_empty_paths) == 3
         assert cert_record['files']['ca'] == ca_record['files']['cert']
+
+        cert_bundle = certipy.store.get_files(cert_name)
+        cert_x509 = cert_bundle.cert.load()
+        num_extensions = cert_x509.get_extension_count()
+        extensions = []
+        for i in range(num_extensions):
+            ext = cert_x509.get_extension(i)
+            if ext:
+                extensions.append(ext.get_short_name().decode('utf-8'))
+
+        # TODO: Would be great to test that the SANS are the ones I set up,
+        # but values are exported as ASN.1 encoded byte strings...
+        assert 'subjectAltName' in extensions
+
 
         # add a second CA
         ca_name1 = 'baz'

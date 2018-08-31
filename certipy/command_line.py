@@ -91,7 +91,8 @@ def main():
     parser.add_argument(
         '--valid', type=int, default=5, help="Years the cert is valid for.")
     parser.add_argument(
-        '--alt-names', default="", help="Alt names for the certificate.")
+        '--alt-names', default="",
+        help="Alt names for the certificate (comma delimited).")
     parser.add_argument(
         '--store-dir', default="out",
         help="The location for the store and certs.")
@@ -112,6 +113,10 @@ def main():
             print("Unable to delete.", e)
         sys.exit(0)
 
+    alt_names = None
+    if args.alt_names:
+        alt_names = [_.strip() for _ in args.alt_names.split(',')]
+
     if args.ca_name:
         ca_record = certipy.store.get_record(args.ca_name)
         if ca_record:
@@ -119,7 +124,7 @@ def main():
                 record = certipy.create_signed_pair(
                     args.name, args.ca_name, cert_type=cert_type,
                     bits=args.bits, years=args.valid,
-                    alt_names=args.alt_names, overwrite=args.overwrite)
+                    alt_names=alt_names, overwrite=args.overwrite)
             except CertExistsError as e:
                 print(e)
         else:
@@ -130,7 +135,7 @@ def main():
         try:
             record = certipy.create_ca(
                 args.name, cert_type=cert_type, bits=args.bits,
-                years=args.valid, alt_names=args.alt_names,
+                years=args.valid, alt_names=alt_names,
                 overwrite=args.overwrite)
         except CertExistsError as e:
             print(e)

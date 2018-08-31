@@ -564,14 +564,15 @@ class Certipy():
         return out_file_path
 
     def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
-                  alt_names=b"", years=5, serial=0, overwrite=False):
+                  alt_names=None, years=5, serial=0, overwrite=False):
         """
         Create a self-signed certificate authority
 
         Arguments: name     - The name of the CA
                    cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
                    bits     - The number of bits to use
-                   alt_names - A byte string of alternative names for the CA
+                   alt_names - An array of alternative names in the format:
+                               IP:address, DNS:address
         Returns:   KeyCertPair for the new CA
         """
 
@@ -593,8 +594,11 @@ class Certipy():
 
         if alt_names:
             extensions.append(
-                crypto.X509Extension(b"subjectAltName", False, alt_names)
+                crypto.X509Extension(b"subjectAltName",
+                                     False, ",".join(alt_names).encode())
             )
+
+
 
         # TODO: start time before today for clock skew?
         cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*years),
@@ -605,7 +609,7 @@ class Certipy():
         return self.store.get_record(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
-                           bits=2048, years=5, alt_names=b"", serial=0,
+                           bits=2048, years=5, alt_names=None, serial=0,
                            overwrite=False):
         """
         Create a key-cert pair
@@ -614,7 +618,8 @@ class Certipy():
                    ca_name   - The name of the CA to sign this cert
                    cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
                    bits     - The number of bits to use
-                   alt_names - A byte string of alternative names for this cert
+                   alt_names - An array of alternative names in the format:
+                               IP:address, DNS:address
         Returns:   KeyCertPair for the new signed pair
         """
 
@@ -627,7 +632,8 @@ class Certipy():
 
         if alt_names:
             extensions.append(
-                crypto.X509Extension(b"subjectAltName", False, alt_names)
+                crypto.X509Extension(b"subjectAltName",
+                                     False, ",".join(alt_names).encode())
             )
 
         ca_bundle = self.store.get_files(ca_name)
