@@ -261,11 +261,14 @@ class CertStore():
     Name field.
     """
 
-    def __init__(self, containing_dir='out', store_file='certipy.json'):
+    def __init__(self, containing_dir='out', store_file='certipy.json',
+                 remove_existing=False):
         self.store = {}
         self.containing_dir = containing_dir
         self.store_file_path = os.path.join(containing_dir, store_file)
         try:
+            if remove_existing:
+                shutil.rmtree(containing_dir)
             os.stat(containing_dir)
             self.load()
         except FileNotFoundError:
@@ -452,8 +455,10 @@ class CertStore():
 
 
 class Certipy():
-    def __init__(self, store_dir='out', store_file='certipy.json'):
-        self.store = CertStore(containing_dir=store_dir, store_file=store_file)
+    def __init__(self, store_dir='out', store_file='certipy.json',
+                 remove_existing=False):
+        self.store = CertStore(containing_dir=store_dir, store_file=store_file,
+                               remove_existing=remove_existing)
 
     def create_key_pair(self, cert_type, bits):
         """
