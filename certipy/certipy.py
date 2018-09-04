@@ -308,13 +308,24 @@ class CertStore():
         return TLSFileBundle(common_name).from_record(record)
 
     def add_record(self, common_name, serial=0, parent_ca='',
-                   signees=None, files=None, record=None):
+                   signees=None, files=None, record=None,
+                   overwrite=False):
         """Manually create a record of certs
 
         Generally, Certipy can be left to manage certificate locations and
         storage, but it is occasionally useful to keep track of a set of
         certs that were created externally (for example, let's encrypt)
         """
+
+        if not overwrite:
+            try:
+                self.get_record(common_name)
+                raise CertExistsError(
+                    "Certificate {name} already exists!"
+                    " Set overwrite=True to force add."
+                    .format(name=common_name))
+            except CertNotFoundError:
+                pass
 
         record = record or {
             'serial': serial,
