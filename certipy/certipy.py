@@ -203,9 +203,10 @@ class TLSFileBundle():
 
     def __init__(self, common_name, files=None, x509s=None, serial=0,
                  parent_ca='', signees=None):
-        self.serial = serial
-        self.parent_ca = parent_ca
-        self.signees = signees
+        self.record = {}
+        self.record['serial'] = serial
+        self.record['parent_ca'] = parent_ca
+        self.record['signees'] = signees
         for t in TLSFileType:
             setattr(self, t.value, None)
 
@@ -253,20 +254,15 @@ class TLSFileBundle():
                    [_.value for _ in TLSFileType]]
         # If a cert isn't defined in this bundle, remove it
         tf_list = filter(lambda x: x, tf_list)
-        return {
-            'serial': self.serial,
-            'parent_ca': self.parent_ca,
-            'signees': self.signees,
-            'files': {tf.file_type.value: tf.file_path for tf in tf_list},
-        }
+        files = {tf.file_type.value: tf.file_path for tf in tf_list}
+        self.record['files'] = files
+        return self.record
 
     def from_record(self, record):
         """Build a bundle from a CertStore record"""
 
-        self.serial = record['serial']
-        self.parent_ca = record['parent_ca']
-        self.signees = record['signees']
-        self._setup_tls_files(record['files'])
+        self.record = record
+        self._setup_tls_files(self.record['files'])
         return self
 
 
@@ -444,14 +440,14 @@ class CertStore():
         """Delete the record associated with this common name"""
 
         bundle = self.get_files(common_name)
-        num_signees = len(Counter(bundle.signees))
+        num_signees = len(Counter(bundle.record['signees']))
         if bundle.is_ca() and num_signees > 0:
             raise CertificateAuthorityInUseError(
                 "Authority {name} has signed {x} certificates"
                 .format(name=common_name, x=num_signees)
             )
         try:
-            ca_name = bundle.parent_ca
+            ca_name = bundle.record['parent_ca']
             ca_record = self.get_record(ca_name)
             self.remove_sign_link(ca_name, common_name)
         except CertNotFoundError:

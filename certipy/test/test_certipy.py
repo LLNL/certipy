@@ -290,13 +290,16 @@ def test_certipy():
         assert os.path.exists(deleted_record['files']['ca'])
 
         # create an intermediate CA
+        begin_ca_signee_num = len(ca_record['signees'] or {})
         intermediate_ca = 'bat'
         intermediate_ca_record = certipy.create_ca(
             intermediate_ca, ca_name=ca_name, pathlen=1)
+        end_ca_signee_num = len(ca_record['signees'])
         intermediate_ca_bundle = certipy.store.get_files(intermediate_ca)
         basic_constraints = intermediate_ca_bundle.cert.get_extension_value(
             'basicConstraints')
 
-        assert intermediate_ca_bundle.parent_ca == ca_name
+        assert end_ca_signee_num > begin_ca_signee_num
+        assert intermediate_ca_bundle.record['parent_ca'] == ca_name
         assert intermediate_ca_bundle.is_ca()
         assert 'pathlen:1' in basic_constraints
