@@ -136,7 +136,7 @@ class TLSFile():
     def __str__(self):
         data = ''
         if not self.x509:
-            return data
+            self.load()
 
         if self.file_type is TLSFileType.KEY:
             data = crypto.dump_privatekey(
@@ -146,6 +146,19 @@ class TLSFile():
                 self.encoding, self.x509).decode("utf-8")
 
         return data
+
+    def get_extension_value(self, ext_name):
+        if self.is_private():
+            return
+        if not self.x509:
+            self.load()
+        num_extensions = self.x509.get_extension_count()
+        for i in range(num_extensions):
+            ext = self.x509.get_extension(i)
+            if ext:
+                short_name = ext.get_short_name().decode('utf-8')
+                if short_name == ext_name:
+                    return str(ext)
 
     def is_private(self):
         """Is this a private key"""
