@@ -160,6 +160,19 @@ class TLSFile():
                 if short_name == ext_name:
                     return str(ext)
 
+    def is_ca(self):
+        if self.is_private():
+            return False
+
+        if not self.x509:
+            self.load()
+
+        ext_value = self.get_extension_value('basicConstraints')
+        if ext_value:
+            return "CA:TRUE" in ext_value
+        else:
+            return False
+
     def is_private(self):
         """Is this a private key"""
 
@@ -189,7 +202,7 @@ class TLSFileBundle():
     """Maintains information that is shared by a set of TLSFiles"""
 
     def __init__(self, common_name, files=None, x509s=None, serial=0,
-                 is_ca=False, parent_ca='', signees=None):
+                 parent_ca='', signees=None):
         self.serial = serial
         self.parent_ca = parent_ca
         self.signees = signees
@@ -231,8 +244,7 @@ class TLSFileBundle():
 
     def is_ca(self):
         """Is this bundle for a CA certificate"""
-
-        return not self.parent_ca
+        return self.cert.is_ca()
 
     def to_record(self):
         """Create a CertStore record from this TLSFileBundle"""
