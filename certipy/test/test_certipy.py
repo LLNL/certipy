@@ -222,7 +222,7 @@ def test_certipy():
         # create a CA
         ca_name = 'foo'
         certipy = Certipy(store_dir=td)
-        ca_record = certipy.create_ca(ca_name)
+        ca_record = certipy.create_ca(ca_name, pathlen=-1)
 
         non_empty_paths = [f for f in ca_record['files'].values() if f]
         assert len(non_empty_paths) == 2
@@ -245,17 +245,14 @@ def test_certipy():
         assert cert_record['files']['ca'] == ca_record['files']['cert']
 
         cert_bundle = certipy.store.get_files(cert_name)
-        cert_x509 = cert_bundle.cert.load()
-        num_extensions = cert_x509.get_extension_count()
-        extensions = []
-        for i in range(num_extensions):
-            ext = cert_x509.get_extension(i)
-            if ext:
-                extensions.append(ext.get_short_name().decode('utf-8'))
+        stored_alt_names = cert_bundle.cert.get_extension_value(
+            'subjectAltName')
 
-        # TODO: Would be great to test that the SANS are the ones I set up,
-        # but values are exported as ASN.1 encoded byte strings...
-        assert 'subjectAltName' in extensions
+        assert alt_names[0] in stored_alt_names
+        # For some reason, the string representation changes IP: to
+        # IP Address:... the important part is that the actual IP is in the
+        # extension.
+        assert alt_names[1][3:] in stored_alt_names
 
 
         # add a second CA
@@ -291,3 +288,15 @@ def test_certipy():
 
         # the CA cert should still be around, we have to delete that explicitly
         assert os.path.exists(deleted_record['files']['ca'])
+
+        # create an intermediate CA
+        intermediate_ca = 'bat'
+        intermediate_ca_record = certipy.create_ca(
+            intermediate_ca, ca_name=ca_name, pathlen=1)
+        intermediate_ca_bundle = certipy.store.get_files(intermediate_ca)
+        basic_constraints = intermediate_ca_bundle.cert.get_extension_value(
+            'basicConstraints')
+
+        assert intermediate_ca_bundle.parent_ca == ca_name
+        assert intermediate_ca_bundle.is_ca()
+        assert 'pathlen:1' in basic_constraints

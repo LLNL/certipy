@@ -450,13 +450,12 @@ class CertStore():
                 "Authority {name} has signed {x} certificates"
                 .format(name=common_name, x=num_signees)
             )
-        elif not bundle.is_ca():
-            try:
-                ca_name = bundle.parent_ca
-                ca_record = self.get_record(ca_name)
-                self.remove_sign_link(ca_name, common_name)
-            except CertNotFoundError:
-                pass
+        try:
+            ca_name = bundle.parent_ca
+            ca_record = self.get_record(ca_name)
+            self.remove_sign_link(ca_name, common_name)
+        except CertNotFoundError:
+            pass
         record_copy = dict(self.store[common_name])
         del self.store[common_name]
         self.save()
@@ -604,10 +603,11 @@ class Certipy():
                 fh.write(str(bundle.cert))
         return out_file_path
 
-    def create_ca(self, name, cert_type=crypto.TYPE_RSA, bits=2048,
-                  alt_names=None, years=5, serial=0, overwrite=False):
+    def create_ca(self, name, ca_name='', cert_type=crypto.TYPE_RSA, bits=2048,
+                  alt_names=None, years=5, serial=0, pathlen=0,
+                  overwrite=False):
         """
-        Create a self-signed certificate authority
+        Create a certificate authority
 
         Arguments: name     - The name of the CA
                    cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
@@ -619,9 +619,26 @@ class Certipy():
 
         cakey = self.create_key_pair(cert_type, bits)
         req = self.create_request(cakey, CN=name)
+        signing_key = cakey
+        signing_cert = req
+
+        parent_ca = ''
+        if ca_name:
+            ca_bundle = self.store.get_files(ca_name)
+            signing_key = ca_bundle.key.load()
+            signing_cert = ca_bundle.cert.load()
+            parent_ca = ca_bundle.cert.file_path
+
+        basicConstraints = "CA:true"
+        # If pathlen is exactly 0, this CA cannot sign intermediaries.
+        # A negative value leaves this out entirely and allows arbitrary
+        # numbers of intermediates.
+        if pathlen >=0:
+            basicConstraints += ', pathlen:' + str(pathlen)
+
         extensions = [
             crypto.X509Extension(
-                b"basicConstraints", True, b"CA:true, pathlen:0"),
+                b"basicConstraints", True, basicConstraints.encode()),
             crypto.X509Extension(
                 b"keyUsage", True, b"keyCertSign, cRLSign"),
             crypto.X509Extension(
@@ -639,14 +656,16 @@ class Certipy():
                                      False, ",".join(alt_names).encode())
             )
 
-
-
         # TODO: start time before today for clock skew?
-        cacert = self.sign(req, (req, cakey), (0, 60*60*24*365*years),
-                           extensions=extensions)
+        cacert = self.sign(
+            req, (signing_cert, signing_key), (0, 60*60*24*365*years),
+            extensions=extensions)
 
         x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
-        self.store.add_files(name, x509s, overwrite=overwrite)
+        self.store.add_files(name, x509s, overwrite=overwrite,
+                             parent_ca=parent_ca)
+        if ca_name:
+            self.store.add_sign_link(ca_name, name)
         return self.store.get_record(name)
 
     def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
