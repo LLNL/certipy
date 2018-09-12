@@ -103,8 +103,7 @@ Records are dicts with the following structure:
 }
 ```
 
-The `parent_ca` field will be empty if the certificate is itself a CA.
-Likewise, `signees` will be empty for non-CA certificates. The `signees` field
+The `signees` will be empty for non-CA certificates. The `signees` field
 is stored as a python `Counter`. These relationships are used to build trust
 bundles.
 
