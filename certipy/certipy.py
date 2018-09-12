@@ -575,27 +575,42 @@ class Certipy():
 
         records = [rec for name, rec
                    in self.store.store.items() if name in names]
-        return self.create_ca_bundle(
-            bundle_name, ca_names=[r['parent_ca'] for r in records])
+        return self.create_bundle(
+            bundle_name, names=[r['parent_ca'] for r in records])
 
     def create_ca_bundle(self, bundle_name, ca_names=None):
         """
         Create a bundle of CA public certs for trust distribution
 
+        Deprecated: 0.1.2
         Arguments: ca_names    - The names of CAs to include in the bundle
                    bundle_name - The name of the bundle file to output
         Returns:   Path to the bundle file
         """
 
-        if not ca_names:
-            ca_names = []
-            for name, record in self.store.store.items():
-                if not record['parent_ca']:
-                    ca_names.append(name)
+        return self.create_bundle(bundle_name, names=ca_names)
+
+    def create_bundle(self, bundle_name, names=None, ca_only=True):
+        """Create a bundle of public certs for trust distribution
+
+        This will create a bundle of both CAs and/or regular certificates.
+        Arguments: names       - The names of certs to include in the bundle
+                   bundle_name - The name of the bundle file to output
+        Returns:   Path to the bundle file
+        """
+
+        if not names:
+            if ca_only:
+                names = []
+                for name, record in self.store.store.items():
+                    if record['is_ca']:
+                        names.append(name)
+            else:
+                names = self.store.store.keys()
 
         out_file_path = os.path.join(self.store.containing_dir, bundle_name)
         with open(out_file_path, 'w') as fh:
-            for name in ca_names:
+            for name in names:
                 bundle = self.store.get_files(name)
                 bundle.cert.load()
                 fh.write(str(bundle.cert))
