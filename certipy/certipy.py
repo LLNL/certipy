@@ -616,6 +616,41 @@ class Certipy():
                 fh.write(str(bundle.cert))
         return out_file_path
 
+    def trust_from_graph(self, graph):
+        """Create a set of trust bundles from a relationship graph.
+
+        Components in this sense are defined by unique CAs. This method assists
+        in setting up complicated trust between various components that need
+        to do TLS auth.
+        Arguments: graph - dict component:list(components)
+        Returns:   dict component:trust bundle file path
+        """
+
+        # Ensure there are CAs backing all graph components
+        def distinct_components(graph):
+            """Return a set of components from the provided graph."""
+            components = set(graph.keys())
+            for trusts in graph.values():
+                components |= set(trusts)
+            return components
+
+        # Default to creating a CA (incapable of signing intermediaries) to
+        # identify a component not known to Certipy
+        for component in distinct_components(graph):
+            try:
+                self.store.get_record(component)
+            except CertNotFoundError:
+                self.create_ca(component)
+
+        # Build bundles from the graph
+        trust_files = {}
+        for component, trusts in graph.items():
+            file_name = component + '_trust.crt'
+            trust_files[component] = self.create_bundle(
+                file_name, names=trusts, ca_only=False)
+
+        return trust_files
+
     def create_ca(self, name, ca_name='', cert_type=crypto.TYPE_RSA, bits=2048,
                   alt_names=None, years=5, serial=0, pathlen=0,
                   overwrite=False):

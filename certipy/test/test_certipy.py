@@ -303,3 +303,41 @@ def test_certipy():
         assert intermediate_ca_bundle.record['parent_ca'] == ca_name
         assert intermediate_ca_bundle.is_ca()
         assert 'pathlen:1' in basic_constraints
+
+def test_certipy_trust_graph():
+    trust_graph = {
+        'foo': ['foo', 'bar'],
+        'bar': ['foo'],
+        'baz': ['bar'],
+    }
+
+    def distinct_components(graph):
+        """Return a set of components from the provided graph."""
+        components = set(graph.keys())
+        for trusts in graph.values():
+            components |= set(trusts)
+        return components
+
+    with TemporaryDirectory() as td:
+        certipy = Certipy(store_dir=td)
+        # after this, all components in the graph should exist in certipy
+        trust_files = certipy.trust_from_graph(trust_graph)
+
+        bundles = {}
+        all_components = distinct_components(trust_graph)
+
+        for component in all_components:
+            bundles[component] = certipy.store.get_files(component)
+
+        # components should only trust others listed explicitly in the graph
+        for component, trusts in trust_graph.items():
+            trust_file = trust_files[component]
+            not_trusts = all_components - set(trusts)
+            with open(trust_file) as fh:
+                trust_bundle = fh.read()
+                for trusted_comp in trusts:
+                    bundle = bundles[trusted_comp]
+                    assert str(bundle.cert) in trust_bundle
+                for untrusted_comp in not_trusts:
+                    bundle = bundles[untrusted_comp]
+                    assert str(bundle.cert) not in trust_bundle
