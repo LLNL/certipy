@@ -26,6 +26,7 @@ in your current directory.
 ```
 $ certipy foo
 FILES {'ca': '', 'cert': 'out/foo/foo.crt', 'key': 'out/foo/foo.key'}
+IS_CA True
 SERIAL 0
 SIGNEES None
 PARENT_CA
@@ -36,6 +37,7 @@ Creating and signing a key-cert pair:
 ```
 $ certipy bar --ca-name foo
 FILES {'ca': 'out/foo/foo.crt', 'key': 'out/bar/bar.key', 'cert': 'out/bar/bar.crt'}
+IS_CA False
 SERIAL 0
 SIGNEES None
 PARENT_CA foo
@@ -47,6 +49,7 @@ Removal:
 certipy --rm bar
 Deleted:
 FILES {'ca': 'out/foo/foo.crt', 'key': 'out/bar/bar.key', 'cert': 'out/bar/bar.crt'}
+IS_CA False
 SERIAL 0
 SIGNEES None
 PARENT_CA foo
@@ -91,6 +94,7 @@ Records are dicts with the following structure:
 ```
 {
   'serial': 0,
+  'is_ca': true,
   'parent_ca': 'ca_name',
   'signees': {
     'signee_name': 1

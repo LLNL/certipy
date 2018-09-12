@@ -202,9 +202,10 @@ class TLSFileBundle():
     """Maintains information that is shared by a set of TLSFiles"""
 
     def __init__(self, common_name, files=None, x509s=None, serial=0,
-                 parent_ca='', signees=None):
+                 is_ca=False, parent_ca='', signees=None):
         self.record = {}
         self.record['serial'] = serial
+        self.record['is_ca'] = is_ca
         self.record['parent_ca'] = parent_ca
         self.record['signees'] = signees
         for t in TLSFileType:
@@ -245,7 +246,7 @@ class TLSFileBundle():
 
     def is_ca(self):
         """Is this bundle for a CA certificate"""
-        return self.cert.is_ca()
+        return self.record['is_ca']
 
     def to_record(self):
         """Create a CertStore record from this TLSFileBundle"""
@@ -333,7 +334,7 @@ class CertStore():
 
     def add_record(self, common_name, serial=0, parent_ca='',
                    signees=None, files=None, record=None,
-                   overwrite=False):
+                   is_ca=False, overwrite=False):
         """Manually create a record of certs
 
         Generally, Certipy can be left to manage certificate locations and
@@ -353,6 +354,7 @@ class CertStore():
 
         record = record or {
             'serial': serial,
+            'is_ca': is_ca,
             'parent_ca': parent_ca,
             'signees': signees,
             'files': files,
@@ -361,7 +363,7 @@ class CertStore():
         self.save()
 
     def add_files(self, common_name, x509s, files=None, parent_ca='',
-                  signees=None, serial=0, overwrite=False):
+                  is_ca=False, signees=None, serial=0, overwrite=False):
         """Add a set files comprising a certificate to Certipy
 
         Used with all the defaults, Certipy will manage creation of file paths
@@ -395,7 +397,7 @@ class CertStore():
                 'ca': ca_file,
             }
             bundle = TLSFileBundle(
-                common_name, files=files, x509s=x509s,
+                common_name, files=files, x509s=x509s, is_ca=is_ca,
                 serial=serial, parent_ca=parent_ca, signees=signees)
             self.store[common_name] = bundle.to_record()
         self.save()
@@ -659,7 +661,7 @@ class Certipy():
 
         x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
         self.store.add_files(name, x509s, overwrite=overwrite,
-                             parent_ca=parent_ca)
+                             parent_ca=parent_ca, is_ca=True)
         if ca_name:
             self.store.add_sign_link(ca_name, name)
         return self.store.get_record(name)
