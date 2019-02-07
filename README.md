@@ -64,14 +64,14 @@ from certipy import Certipy
 
 certipy = Certipy(store_dir='/tmp')
 certipy.create_ca('foo')
-record = certipy.get_record('foo')
+record = certipy.store.get_record('foo')
 ```
 
 Creating and signing a key-cert pair:
 
 ```
 certipy.create_signed_pair('bar', 'foo')
-record = certipy.get_record('bar')
+record = certipy.store.get_record('bar')
 ```
 
 Creating trust:
