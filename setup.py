@@ -81,7 +81,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 setup(
     name='certipy',
 
-    version='0.1.2',
+    version='0.1.3',
 
     description='Utility to create and sign CAs and certificates',
     long_description=long_description,
