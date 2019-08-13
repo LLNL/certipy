@@ -233,6 +233,14 @@ def test_certipy():
             assert str(ca_bundle.cert) in all_certs
             assert str(ca_bundle1.cert) not in all_certs
 
+        # overwrite cert
+        cert_name = 'bar'
+        alt_names = ['DNS:bar.example.com', 'IP:10.10.10.10']
+        cert_record = certipy.create_signed_pair(
+                cert_name, ca_name, alt_names=alt_names, overwrite=True)
+
+        assert cert_record['serial'] == 1
+
         # delete certs
         deleted_record = certipy.store.remove_files('bar', delete_dir=True)
         assert not os.path.exists(deleted_record['files']['cert'])

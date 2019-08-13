@@ -330,8 +330,7 @@ class CertStore():
                 .format(name=common_name))
         elif common_name in self.store and overwrite:
             record = self.get_record(common_name)
-            serial = int(record['serial'])
-            record['serial'] = serial + 1
+            record['serial'] = serial
             TLSFileBundle(common_name).from_record(record).save_x509s(x509s)
         else:
             file_base_tmpl = "{prefix}/{cn}/{cn}"
@@ -656,10 +655,13 @@ class Certipy():
                                      False, ",".join(alt_names).encode())
             )
 
+        if overwrite:
+            serial += 1
+
         # TODO: start time before today for clock skew?
         cacert = self.sign(
             req, (signing_cert, signing_key), (0, 60*60*24*365*years),
-            extensions=extensions)
+            extensions=extensions, serial=serial)
 
         x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
         self.store.add_files(name, x509s, overwrite=overwrite,
@@ -696,6 +698,9 @@ class Certipy():
                                      False, ",".join(alt_names).encode())
             )
 
+        if overwrite:
+            serial += 1
+
         ca_bundle = self.store.get_files(ca_name)
         cacert = ca_bundle.cert.load()
         cakey = ca_bundle.key.load()
@@ -705,7 +710,7 @@ class Certipy():
 
         x509s = {'key': key, 'cert': cert, 'ca': None}
         self.store.add_files(name, x509s, parent_ca=ca_name,
-                             overwrite=overwrite)
+                             overwrite=overwrite, serial=serial)
 
         # Relate these certs as being parent and child
         self.store.add_sign_link(ca_name, name)
