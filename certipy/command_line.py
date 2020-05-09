@@ -52,7 +52,7 @@ def main():
     args = parser.parse_args()
 
     certipy = Certipy(store_dir=args.store_dir)
-    cert_type = crypto.TYPE_RSA if args.cert_type is "rsa" else crypto.TYPE_DSA
+    cert_type = crypto.TYPE_RSA if args.cert_type == "rsa" else crypto.TYPE_DSA
     record = None
 
     if args.rm:
