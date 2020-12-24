@@ -659,11 +659,11 @@ class Certipy():
         # TODO: start time before today for clock skew?
         cacert = self.sign(
             req, (signing_cert, signing_key), (0, 60*60*24*365*years),
-            extensions=extensions)
+            extensions=extensions, serial = serial)
 
         x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
         self.store.add_files(name, x509s, overwrite=overwrite,
-                             parent_ca=parent_ca, is_ca=True)
+                             parent_ca=parent_ca, is_ca=True, serial = serial)
         if ca_name:
             self.store.add_sign_link(ca_name, name)
         return self.store.get_record(name)
@@ -701,11 +701,11 @@ class Certipy():
         cakey = ca_bundle.key.load()
 
         cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*years),
-                         extensions=extensions)
+                         extensions=extensions, serial = serial)
 
         x509s = {'key': key, 'cert': cert, 'ca': None}
         self.store.add_files(name, x509s, parent_ca=ca_name,
-                             overwrite=overwrite)
+                             overwrite=overwrite, serial = serial)
 
         # Relate these certs as being parent and child
         self.store.add_sign_link(ca_name, name)
