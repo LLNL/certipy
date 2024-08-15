@@ -12,19 +12,86 @@
 
 import os
 import json
-import argparse
-import logging
 import shutil
+import warnings
 from enum import Enum
+from functools import partial
 from collections import Counter
-from OpenSSL import crypto
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography import x509
+from ipaddress import ip_address
+
+
+class KeyType(Enum):
+    """Enum for available key types"""
+
+    rsa = "rsa"
+    # not supported (widely deprecated)
+    # dsa = 'dsa'
+    # not supported (yet)
+    # ecdsa = 'ecdsa'
 
 
 class TLSFileType(Enum):
     KEY = 'key'
     CERT = 'cert'
     CA = 'ca'
+
+def _make_oid_map(enum_cls):
+    """Make a mapping of name: OIDClass from an Enum
+
+    for easy lookup of e.g. 'subjectAltName': x509.ExtensionOID.SubjectAlternativeName
+    """
+    mapping = {}
+    for name in dir(enum_cls):
+        if name.startswith("_"):
+            continue
+        value = getattr(enum_cls, name)
+        if isinstance(value, x509.ObjectIdentifier):
+            mapping[value._name] = value
+    return mapping
+
+
+# mapping of CN to NameOID.COUNTRY_NAME
+_name_oid_map = _make_oid_map(x509.oid.NameOID)
+# short names
+_name_oid_map["C"] = x509.oid.NameOID.COUNTRY_NAME
+_name_oid_map["ST"] = x509.oid.NameOID.STATE_OR_PROVINCE_NAME
+_name_oid_map["L"] = x509.oid.NameOID.LOCALITY_NAME
+_name_oid_map["O"] = x509.oid.NameOID.ORGANIZATION_NAME
+_name_oid_map["OU"] = x509.oid.NameOID.ORGANIZATIONAL_UNIT_NAME
+_name_oid_map["CN"] = x509.oid.NameOID.COMMON_NAME
+
+_ext_oid_map = _make_oid_map(x509.oid.ExtensionOID)
+
+
+def _altname(name):
+    """Construct a subjectAltName field from an OpenSSL-style string
+
+    turns IP:1.2.3.4 into x509.IPAddress('1.2.3.4')
+    """
+    key, _, value = name.partition(":")
+    # are these case sensitive? I don't find a spec,
+    # in practice only IP and DNS are used.
+    if key == "IP":
+        return x509.IPAddress(ip_address(value))
+    elif key == "DNS":
+        return x509.DNSName(value)
+    elif key == "email":
+        return x509.RFC822Name(value)
+    elif key == "URI":
+        return x509.UniformResourceIdentifier(value)
+    elif key == "RID":
+        return x509.RegisteredID(value)
+    elif key == "dirName":
+        return x509.DirectoryName(value)
+    else:
+        raise ValueError(f"Unrecognized subjectAltName prefix {key!r} in {name!r}")
 
 
 class CertNotFoundError(Exception):
@@ -77,11 +144,25 @@ def open_tls_file(file_path, mode, private=True):
 class TLSFile():
     """Describes basic information about files used for TLS"""
 
-    def __init__(self, file_path, encoding=crypto.FILETYPE_PEM,
+    def __init__(self, file_path, encoding=serialization.Encoding.PEM,
                  file_type=TLSFileType.CERT, x509=None):
+        if isinstance(encoding, int):
+            warnings.warn(
+                "OpenSSL.crypto.TYPE_* encoding arguments are deprecated. Use cryptography.hazmat.primitives.serialization.Encoding enum or string 'PEM'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            # match values in OpenSSL.crypto
+            if encoding == 1:
+                # PEM
+                encoding = serialization.Encoding.PEM
+            elif encoding == 2:
+                # ASN / DER
+                encoding = serialization.Encoding.DER
+
         self.file_path = file_path
         self.containing_dir = os.path.dirname(self.file_path)
-        self.encoding = encoding
+        self.encoding = serialization.Encoding(encoding)
         self.file_type = file_type
         self.x509 = x509
 
@@ -91,26 +172,36 @@ class TLSFile():
             self.load()
 
         if self.file_type is TLSFileType.KEY:
-            data = crypto.dump_privatekey(
-                self.encoding, self.x509).decode("utf-8")
+            data = self.x509.private_bytes(
+                encoding=self.encoding,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
         else:
-            data = crypto.dump_certificate(
-                self.encoding, self.x509).decode("utf-8")
+            data = self.x509.public_bytes(self.encoding)
 
-        return data
+        return data.decode("utf-8")
 
     def get_extension_value(self, ext_name):
         if self.is_private():
             return
         if not self.x509:
             self.load()
-        num_extensions = self.x509.get_extension_count()
-        for i in range(num_extensions):
-            ext = self.x509.get_extension(i)
-            if ext:
-                short_name = ext.get_short_name().decode('utf-8')
-                if short_name == ext_name:
-                    return str(ext)
+
+        if isinstance(ext_name, str):
+            # string name, lookup OID
+            ext_oid = _ext_oid_map[ext_name]
+        elif hasattr(ext_name, "oid"):
+            # given ExtensionType, get OID
+            ext_oid = ext_name.oid
+        else:
+            # otherwise, assume given OID
+            ext_oid = ext_name
+
+        try:
+            return self.x509.extensions.get_extension_for_oid(ext_oid).value
+        except x509.ExtensionNotFound:
+            return None
 
     def is_ca(self):
         if self.is_private():
@@ -119,11 +210,12 @@ class TLSFile():
         if not self.x509:
             self.load()
 
-        ext_value = self.get_extension_value('basicConstraints')
-        if ext_value:
-            return "CA:TRUE" in ext_value
-        else:
+        try:
+            basic_constraints = self.x509.get_extension_for_class(x509.BasicConstraints)
+        except x509.ExtensionNotFound:
             return False
+        else:
+            return basic_constraints.ca
 
     def is_private(self):
         """Is this a private key"""
@@ -134,12 +226,20 @@ class TLSFile():
         """Load from a file and return an x509 object"""
 
         private = self.is_private()
-        with open_tls_file(self.file_path, 'r', private=private) as fh:
-            if private:
-                self.x509 = crypto.load_privatekey(self.encoding, fh.read())
+        if private:
+            if self.encoding == serialization.Encoding.DER:
+                load = serialization.load_der_private_key
             else:
-                self.x509 = crypto.load_certificate(self.encoding, fh.read())
-            return self.x509
+                load = serialization.load_pem_private_key
+            load = partial(load, password=None)
+        else:
+            if self.encoding == serialization.Encoding.DER:
+                load = x509.load_der_x509_certificate
+            else:
+                load = x509.load_pem_x509_certificate
+        with open_tls_file(self.file_path, "rb", private=private) as fh:
+            self.x509 = load(fh.read())
+        return self.x509
 
     def save(self, x509):
         """Persist this x509 object to disk"""
@@ -438,14 +538,30 @@ class Certipy():
         """
         Create a public/private key pair.
 
-        Arguments: type - Key type, must be one of TYPE_RSA and TYPE_DSA
+        Arguments: type - Key type, must be one of KeyType (currently only 'rsa')
                    bits - Number of bits to use in the key
-        Returns:   The public/private key pair in a PKey object
+        Returns:   The cryptography private_key keypair object
         """
-
-        pkey = crypto.PKey()
-        pkey.generate_key(cert_type, bits)
-        return pkey
+        if isinstance(cert_type, int):
+            warnings.warn(
+                "Certipy support for PyOpenSSL is deprecated. Use `cert_type='rsa'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if cert_type == 6:
+                cert_type = KeyType.rsa
+            elif cert_type == 116:
+                raise ValueError("DSA keys are no longer supported. Use 'rsa'.")
+        # this will raise on unrecognized values
+        key_type = KeyType(cert_type)
+        if key_type == KeyType.rsa:
+            key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=bits,
+            )
+        else:
+            raise ValueError(f"Only cert_type='rsa' is supported, not {cert_type!r}")
+        return key
 
     def create_request(self, pkey, digest="sha256", **name):
         """
@@ -454,11 +570,6 @@ class Certipy():
         Arguments: pkey   - The key to associate with the request
                    digest - Digestion method to use for signing, default is
                             sha256
-                   exts   - X509 extensions see:
-                            https://www.openssl.org/docs/manmaster/man5/
-                            x509v3_config.html#STANDARD-EXTENSIONS
-                            Dict in format:
-                            key -> (val, critical)
                    **name - The name of the subject of the request, possible
                             arguments are:
                               C     - Country name
@@ -472,17 +583,17 @@ class Certipy():
 
         Returns:   The certificate request in an X509Req object
         """
-
-        req = crypto.X509Req()
-        subj = req.get_subject()
+        csr = x509.CertificateSigningRequestBuilder()
 
         if name is not None:
-            for key, value in name.items():
-                setattr(subj, key, value)
+            name_attrs = [
+                x509.NameAttribute(_name_oid_map[key], value)
+                for key, value in name.items()
+            ]
+            csr = csr.subject_name(x509.Name(name_attrs))
 
-        req.set_pubkey(pkey)
-        req.sign(pkey, digest)
-        return req
+        algorithm = getattr(hashes, digest.upper())()
+        return csr.sign(pkey, algorithm)
 
     def sign(self, req, issuer_cert_key, validity_period, digest="sha256",
              extensions=None, serial=0):
@@ -503,22 +614,29 @@ class Certipy():
 
         issuer_cert, issuer_key = issuer_cert_key
         not_before, not_after = validity_period
-        cert = crypto.X509()
-        cert.set_serial_number(serial)
-        cert.gmtime_adj_notBefore(not_before)
-        cert.gmtime_adj_notAfter(not_after)
-        cert.set_issuer(issuer_cert.get_subject())
-        cert.set_subject(req.get_subject())
-        cert.set_pubkey(req.get_pubkey())
+        now = datetime.now(timezone.utc)
+        if not isinstance(not_before, datetime):
+            # backward-compatibility: integer seconds from now
+            not_before = now + timedelta(seconds=not_before)
+        if not isinstance(not_after, datetime):
+            not_after = now + timedelta(seconds=not_after)
+
+        cert_builder = (
+            x509.CertificateBuilder()
+            .subject_name(req.subject)
+            .serial_number(serial or x509.random_serial_number())
+            .not_valid_before(not_before)
+            .not_valid_after(not_after)
+            .issuer_name(issuer_cert.subject)
+            .public_key(req.public_key())
+        )
 
         if extensions:
-            for ext in extensions:
-                if callable(ext):
-                    ext = ext(cert)
-                cert.add_extensions([ext])
+            for ext, critical in extensions:
+                cert_builder = cert_builder.add_extension(ext, critical=critical)
 
-        cert.sign(issuer_key, digest)
-
+        algorithm = getattr(hashes, digest.upper())()
+        cert = cert_builder.sign(issuer_key, algorithm=algorithm)
         return cert
 
     def create_ca_bundle_for_names(self, bundle_name, names):
@@ -603,14 +721,14 @@ class Certipy():
 
         return trust_files
 
-    def create_ca(self, name, ca_name='', cert_type=crypto.TYPE_RSA, bits=2048,
+    def create_ca(self, name, ca_name='', cert_type=KeyType.rsa, bits=2048,
                   alt_names=None, years=5, serial=0, pathlen=0,
                   overwrite=False):
         """
         Create a certificate authority
 
         Arguments: name     - The name of the CA
-                   cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
+                   cert_type - The type of the cert. Always 'rsa'.
                    bits     - The number of bits to use
                    alt_names - An array of alternative names in the format:
                                IP:address, DNS:address
@@ -622,6 +740,14 @@ class Certipy():
         signing_key = cakey
         signing_cert = req
 
+        if pathlen is not None and pathlen < 0:
+            warnings.warn(
+                "negative pathlen is deprecated. Use pathlen=None",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            pathlen = None
+
         parent_ca = ''
         if ca_name:
             ca_bundle = self.store.get_files(ca_name)
@@ -629,31 +755,46 @@ class Certipy():
             signing_cert = ca_bundle.cert.load()
             parent_ca = ca_bundle.cert.file_path
 
-        basicConstraints = "CA:true"
-        # If pathlen is exactly 0, this CA cannot sign intermediaries.
-        # A negative value leaves this out entirely and allows arbitrary
-        # numbers of intermediates.
-        if pathlen >=0:
-            basicConstraints += ', pathlen:' + str(pathlen)
-
         extensions = [
-            crypto.X509Extension(
-                b"basicConstraints", True, basicConstraints.encode()),
-            crypto.X509Extension(
-                b"keyUsage", True, b"keyCertSign, cRLSign"),
-            crypto.X509Extension(
-                b"extendedKeyUsage", True, b"serverAuth, clientAuth"),
-            lambda cert: crypto.X509Extension(
-                b"subjectKeyIdentifier", False, b"hash", subject=cert),
-            lambda cert: crypto.X509Extension(
-                b"authorityKeyIdentifier", False, b"keyid:always",
-                issuer=cert),
+            (x509.BasicConstraints(True, pathlen), True),
+            (
+                x509.KeyUsage(
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    digital_signature=False,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                True,
+            ),
+            (
+                x509.ExtendedKeyUsage(
+                    [
+                        x509.ExtendedKeyUsageOID.SERVER_AUTH,
+                        x509.ExtendedKeyUsageOID.CLIENT_AUTH,
+                    ]
+                ),
+                True,
+            ),
+            (x509.SubjectKeyIdentifier.from_public_key(cakey.public_key()), False),
+            (
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                    signing_cert.public_key()
+                ),
+                False,
+            ),
         ]
 
         if alt_names:
             extensions.append(
-                crypto.X509Extension(b"subjectAltName",
-                                     False, ",".join(alt_names).encode())
+                (
+                    x509.SubjectAlternativeName([_altname(name) for name in alt_names]),
+                    False,
+                )
             )
 
         # TODO: start time before today for clock skew?
@@ -668,7 +809,7 @@ class Certipy():
             self.store.add_sign_link(ca_name, name)
         return self.store.get_record(name)
 
-    def create_signed_pair(self, name, ca_name, cert_type=crypto.TYPE_RSA,
+    def create_signed_pair(self, name, ca_name, cert_type=KeyType.rsa,
                            bits=2048, years=5, alt_names=None, serial=0,
                            overwrite=False):
         """
@@ -676,7 +817,7 @@ class Certipy():
 
         Arguments: name     - The name of the key-cert pair
                    ca_name   - The name of the CA to sign this cert
-                   cert_type - The type of the cert. TYPE_RSA or TYPE_DSA
+                   cert_type - The type of the cert. Always 'rsa'
                    bits     - The number of bits to use
                    alt_names - An array of alternative names in the format:
                                IP:address, DNS:address
@@ -686,22 +827,34 @@ class Certipy():
         key = self.create_key_pair(cert_type, bits)
         req = self.create_request(key, CN=name)
         extensions = [
-            crypto.X509Extension(
-                b"extendedKeyUsage", True, b"serverAuth, clientAuth"),
+            (
+                x509.ExtendedKeyUsage(
+                    [
+                        x509.ExtendedKeyUsageOID.SERVER_AUTH,
+                        x509.ExtendedKeyUsageOID.CLIENT_AUTH,
+                    ]
+                ),
+                True,
+            ),
         ]
 
         if alt_names:
             extensions.append(
-                crypto.X509Extension(b"subjectAltName",
-                                     False, ",".join(alt_names).encode())
+                (
+                    x509.SubjectAlternativeName([_altname(name) for name in alt_names]),
+                    False,
+                )
             )
 
         ca_bundle = self.store.get_files(ca_name)
         cacert = ca_bundle.cert.load()
         cakey = ca_bundle.key.load()
 
-        cert = self.sign(req, (cacert, cakey), (0, 60*60*24*365*years),
-                         extensions=extensions, serial = serial)
+        now = datetime.now(timezone.utc)
+        eol = now + timedelta(days=years * 365)
+        cert = self.sign(
+            req, (cacert, cakey), (now, eol), extensions=extensions, serial=serial
+        )
 
         x509s = {'key': key, 'cert': cert, 'ca': None}
         self.store.add_files(name, x509s, parent_ca=ca_name,
