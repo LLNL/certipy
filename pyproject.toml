@@ -1,0 +1,48 @@
+###############################################################################
+# Copyright (c) 2018, Lawrence Livermore National Security, LLC
+# Produced at the Lawrence Livermore National Laboratory
+# Written by Thomas Mendoza mendoza33@llnl.gov
+# LLNL-CODE-754897
+# All rights reserved
+#
+# This file is part of Certipy: https://github.com/LLNL/certipy
+#
+# SPDX-License-Identifier: BSD-3-Clause
+###############################################################################
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "certipy"
+version = "0.1.3"
+description = "Utility to create and sign CAs and certificates"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
+authors = [{name = "Thomas Mendoza", email = "mendoza33@llnl.gov"}]
+classifiers=[
+    "Development Status :: 4 - Beta",
+
+    "Intended Audience :: Developers",
+    "Topic :: Utilities",
+
+    "License :: OSI Approved :: BSD License",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.3",
+    "Programming Language :: Python :: 3.4",
+    "Programming Language :: Python :: 3.5",
+    "Programming Language :: Python :: 3.6"
+]
+keywords = ["pki", "ssl", "tls", "certificates"]
+dependencies = ["cryptography", "ipaddress"]
+
+[project.optional-dependencies]
+dev = ["pytest", "flask", "requests"]
+test = ["pytest"]
+
+[project.scripts]
+certipy = "certipy.command_line:main"
+
+[project.urls]
+Homepage = "https://github.com/LLNL/certipy"
