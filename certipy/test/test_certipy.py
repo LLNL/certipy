@@ -23,6 +23,16 @@ from ..certipy import (
    CertExistsError, Certipy
 )
 
+@fixture
+def fake_cert_file(tmp_path):
+    sub_dir = tmp_path / "certipy"
+    sub_dir.mkdir()
+
+    filename = sub_dir / "foo.crt"
+    filename.touch()
+    return filename
+
+
 @fixture(scope='module')
 def signed_key_pair():
     pkey = crypto.PKey()
@@ -62,7 +72,7 @@ def record():
     }
 
 
-def test_tls_context_manager():
+def test_tls_context_manager(fake_cert_file):
     def simple_perms(f):
         return oct(os.stat(f).st_mode & 0o777)
 
@@ -71,39 +81,37 @@ def test_tls_context_manager():
         with open_tls_file('foo.test', 'r') as tlsfh:
             pass
 
-    with NamedTemporaryFile('w') as fh:
-        with open_tls_file(fh.name, 'r') as tlsfh:
-            pass
+    with open_tls_file(fake_cert_file, 'r') as tlsfh:
+        pass
+
     # write
-    with NamedTemporaryFile('w') as fh:
-        containing_dir = os.path.dirname(fh.name)
-        # public certificate
-        with open_tls_file(fh.name, 'w', private=False) as tlsfh:
-            assert simple_perms(containing_dir) == '0o755'
+    containing_dir = os.path.dirname(fake_cert_file)
+    # public certificate
+    with open_tls_file(fake_cert_file, 'w', private=False) as tlsfh:
+        assert simple_perms(containing_dir) == '0o755'
 
-        assert simple_perms(fh.name) == '0o644'
+    assert simple_perms(fake_cert_file) == '0o644'
 
-        # private certificate
-        with open_tls_file(fh.name, 'w') as tlsfh:
-            assert simple_perms(containing_dir) == '0o755'
+    # private certificate
+    with open_tls_file(fake_cert_file, 'w') as tlsfh:
+        assert simple_perms(containing_dir) == '0o755'
 
-        assert simple_perms(fh.name) == '0o600'
+    assert simple_perms(fake_cert_file) == '0o600'
 
 
-def test_tls_file(signed_key_pair):
+def test_tls_file(signed_key_pair, fake_cert_file):
     key, cert = signed_key_pair
     def read_write_key(file_type):
-        with NamedTemporaryFile('w') as fh:
-            tlsfile = TLSFile(fh.name, file_type=file_type)
-            # test persist to disk
-            x509 = cert if file_type is TLSFileType.CERT else key
-            tlsfile.save(x509)
-            with open(fh.name, 'r') as f:
-                assert f.read() is not None
-            # test load from disk
-            loaded_tlsfile = TLSFile(fh.name, file_type=file_type)
-            loaded_tlsfile.x509 = tlsfile.load()
-            assert str(loaded_tlsfile) == str(tlsfile)
+        tlsfile = TLSFile(fake_cert_file, file_type=file_type)
+        # test persist to disk
+        x509 = cert if file_type is TLSFileType.CERT else key
+        tlsfile.save(x509)
+        with open(fake_cert_file, 'r') as f:
+            assert f.read() is not None
+        # test load from disk
+        loaded_tlsfile = TLSFile(fake_cert_file, file_type=file_type)
+        loaded_tlsfile.x509 = tlsfile.load()
+        assert str(loaded_tlsfile) == str(tlsfile)
 
     # public key
     read_write_key(TLSFileType.CERT)
