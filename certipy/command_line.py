@@ -11,11 +11,10 @@
 ###############################################################################
 
 import argparse
-import shutil
 import sys
-from OpenSSL import crypto
+
 from certipy import (
-    Certipy, CertExistsError, CertNotFoundError, CertificateAuthorityInUseError
+    Certipy, CertExistsError, CertNotFoundError, CertificateAuthorityInUseError, KeyType
 )
 
 def main():
@@ -36,8 +35,8 @@ def main():
     parser.add_argument(
         '--rm', action="store_true", help="Remove the cert specified by name.")
     parser.add_argument(
-        '--cert-type', default="rsa", choices=['rsa', 'dsa'],
-        help="The type of cert to create.")
+        '--cert-type', default="rsa", choices=[t.value for t in KeyType],
+        help="The type of key to create.")
     parser.add_argument(
         '--bits', type=int, default=2048, help="The number of bits to use.")
     parser.add_argument(
@@ -52,7 +51,6 @@ def main():
     args = parser.parse_args()
 
     certipy = Certipy(store_dir=args.store_dir)
-    cert_type = crypto.TYPE_RSA if args.cert_type == "rsa" else crypto.TYPE_DSA
     record = None
 
     if args.rm:
@@ -74,7 +72,7 @@ def main():
         if ca_record:
             try:
                 record = certipy.create_signed_pair(
-                    args.name, args.ca_name, cert_type=cert_type,
+                    args.name, args.ca_name, cert_type=args.cert_type,
                     bits=args.bits, years=args.valid,
                     alt_names=alt_names, overwrite=args.overwrite)
             except CertExistsError as e:

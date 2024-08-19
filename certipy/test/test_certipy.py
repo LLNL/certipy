@@ -13,18 +13,23 @@
 import os
 import pytest
 import requests
-import shutil
 import socket
 import ssl
 from contextlib import closing, contextmanager
+from datetime import datetime, timedelta, timezone
 from flask import Flask
-from pytest import fixture
-from OpenSSL import crypto
-from pathlib import Path
 from requests.exceptions import SSLError
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import Thread
 from werkzeug.serving import make_server
+
+from pytest import fixture
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from ipaddress import ip_address
 
 from ..certipy import (
    TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
@@ -74,33 +79,28 @@ def fake_cert_file(tmp_path):
 
 @fixture(scope='module')
 def signed_key_pair():
-    pkey = crypto.PKey()
-    pkey.generate_key(crypto.TYPE_RSA, 2048)
-    req = crypto.X509Req()
-    subj = req.get_subject()
-
-    setattr(subj, 'CN', 'test')
-
-    req.set_pubkey(pkey)
-    req.sign(pkey, 'sha256')
-
-    issuer_cert, issuer_key = (req, pkey)
-    not_before, not_after = (0, 60*60*24*365*2)
-    cert = crypto.X509()
-    cert.set_serial_number(0)
-    cert.gmtime_adj_notBefore(not_before)
-    cert.gmtime_adj_notAfter(not_after)
-    cert.set_issuer(issuer_cert.get_subject())
-    cert.set_subject(req.get_subject())
-    cert.set_pubkey(req.get_pubkey())
-
-    cert.sign(issuer_key, 'sha256')
+    pkey = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    subject = issuer = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "test")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(pkey.public_key())
+        .serial_number(1)
+        .not_valid_before(datetime.now(timezone.utc))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=365 * 2))
+        .sign(pkey, hashes.SHA256())
+    )
     return (pkey, cert)
+
 
 @fixture(scope='module')
 def record():
     return {
-        'serial': 0,
+        'serial': 1,
         'parent_ca': '',
         'signees': None,
         'files': {
@@ -172,10 +172,12 @@ def test_tls_file_bundle(signed_key_pair, record):
 
 def test_certipy_store(signed_key_pair, record):
     key, cert = signed_key_pair
-    key_str = crypto.dump_privatekey(crypto.FILETYPE_PEM, key)\
-                .decode('utf-8')
-    cert_str = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)\
-                .decode('utf-8')
+    key_str = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    cert_str = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
     with TemporaryDirectory() as td:
         common_name = 'foo'
         store = CertStore(containing_dir=td)
@@ -221,7 +223,7 @@ def test_certipy():
         # create a CA
         ca_name = 'foo'
         certipy = Certipy(store_dir=td)
-        ca_record = certipy.create_ca(ca_name, pathlen=-1)
+        ca_record = certipy.create_ca(ca_name, pathlen=None)
 
         non_empty_paths = [f for f in ca_record['files'].values() if f]
         assert len(non_empty_paths) == 2
@@ -244,14 +246,14 @@ def test_certipy():
         assert cert_record['files']['ca'] == ca_record['files']['cert']
 
         cert_bundle = certipy.store.get_files(cert_name)
-        stored_alt_names = cert_bundle.cert.get_extension_value(
-            'subjectAltName')
+        cert_bundle.cert.load()
 
-        assert alt_names[0] in stored_alt_names
-        # For some reason, the string representation changes IP: to
-        # IP Address:... the important part is that the actual IP is in the
-        # extension.
-        assert alt_names[1][3:] in stored_alt_names
+        subject_alt = cert_bundle.cert.get_extension_value(x509.SubjectAlternativeName)
+        assert subject_alt is not None
+        assert subject_alt.get_values_for_type(x509.IPAddress) == [
+            ip_address("10.10.10.10")
+        ]
+        assert subject_alt.get_values_for_type(x509.DNSName) == ["bar.example.com"]
 
 
         # add a second CA
@@ -301,7 +303,7 @@ def test_certipy():
         assert end_ca_signee_num > begin_ca_signee_num
         assert intermediate_ca_bundle.record['parent_ca'] == ca_name
         assert intermediate_ca_bundle.is_ca()
-        assert 'pathlen:1' in basic_constraints
+        assert basic_constraints.path_length == 1
 
 def test_certipy_trust_graph():
     trust_graph = {

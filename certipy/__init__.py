@@ -11,11 +11,6 @@
 ###############################################################################
 
 from certipy.certipy import (
-   TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
-   CertNotFoundError, CertExistsError, CertificateAuthorityInUseError, Certipy
-)
-
-__all__ = (
-   TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
+   TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file, KeyType,
    CertNotFoundError, CertExistsError, CertificateAuthorityInUseError, Certipy
 )

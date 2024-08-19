@@ -65,7 +65,7 @@ setup(
 
     packages=find_packages(exclude=['contrib', 'docs', 'test']),
 
-    install_requires=['pyopenssl'],
+    install_requires=['cryptography', 'ipaddress'],
 
     extras_require={
         'dev': ['pytest', 'Flask', 'requests'],
