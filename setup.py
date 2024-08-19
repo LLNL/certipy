@@ -68,7 +68,7 @@ setup(
     install_requires=['pyopenssl'],
 
     extras_require={
-        'dev': ['pytest'],
+        'dev': ['pytest', 'Flask', 'requests'],
         'test': ['pytest'],
     },
 
