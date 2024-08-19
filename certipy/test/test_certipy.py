@@ -13,15 +13,11 @@
 import os
 import pytest
 import requests
-import shutil
 import socket
 import ssl
 from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from flask import Flask
-from pytest import fixture
-from OpenSSL import crypto
-from pathlib import Path
 from requests.exceptions import SSLError
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import Thread
