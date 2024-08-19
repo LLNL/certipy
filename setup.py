@@ -68,7 +68,7 @@ setup(
     install_requires=['cryptography', 'ipaddress'],
 
     extras_require={
-        'dev': ['pytest'],
+        'dev': ['pytest', 'Flask', 'requests'],
         'test': ['pytest'],
     },
 
