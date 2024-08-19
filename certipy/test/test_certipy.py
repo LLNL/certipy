@@ -12,16 +12,56 @@
 
 import os
 import pytest
+import requests
 import shutil
+import socket
+import ssl
+from contextlib import closing, contextmanager
+from flask import Flask
 from pytest import fixture
 from OpenSSL import crypto
 from pathlib import Path
+from requests.exceptions import SSLError
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from threading import Thread
+from werkzeug.serving import make_server
 
 from ..certipy import (
    TLSFileType, TLSFile, TLSFileBundle, CertStore, open_tls_file,
    CertExistsError, Certipy
 )
+
+
+def find_free_port():
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('localhost', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def make_flask_app():
+    app = Flask(__name__)
+
+    @app.route('/')
+    def working():
+        return "working"
+
+
+@contextmanager
+def tls_server(certfile: str, keyfile: str, host: str = 'localhost', port: int = 0):
+    if port == 0:
+        port = find_free_port()
+
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    ssl_context.load_cert_chain(certfile, keyfile)
+    server = make_server(host, port, make_flask_app(), ssl_context=ssl_context, threaded=True)
+    t = Thread(target=server.serve_forever)
+    t.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+
 
 @fixture
 def fake_cert_file(tmp_path):
@@ -31,7 +71,6 @@ def fake_cert_file(tmp_path):
     filename = sub_dir / "foo.crt"
     filename.touch()
     return filename
-
 
 @fixture(scope='module')
 def signed_key_pair():
@@ -301,3 +340,27 @@ def test_certipy_trust_graph():
                 for untrusted_comp in not_trusts:
                     bundle = bundles[untrusted_comp]
                     assert str(bundle.cert) not in trust_bundle
+
+def test_certs():
+    with TemporaryDirectory() as td:
+        # Setup
+        ca_name = 'foo'
+        certipy = Certipy(store_dir=td)
+        ca_record = certipy.create_ca(ca_name, pathlen=-1)
+
+        cert_name = 'bar'
+        alt_names = ['DNS:localhost', 'IP:127.0.0.1']
+        cert_record = certipy.create_signed_pair(
+            cert_name, ca_name, alt_names=alt_names
+        )
+
+        with tls_server(cert_record['files']['cert'], cert_record['files']['key']) as server:
+            # Execute/Verify
+            url = f'https://{server.host}:{server.port}'
+
+            # Fails without specifying a CA for verification
+            with pytest.raises(SSLError):
+                requests.get(url)
+
+            # Succeeds when supplying the CA cert
+            requests.get(url, verify=ca_record['files']['cert'])
