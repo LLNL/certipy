@@ -44,6 +44,9 @@ dependencies = ["cryptography", "ipaddress"]
 dev = ["pytest", "flask", "requests"]
 test = ["pytest"]
 
+[tool.setuptools.packages.find]
+include = ["certipy"]
+
 [project.scripts]
 certipy = "certipy.command_line:main"
 
