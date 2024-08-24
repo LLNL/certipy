@@ -38,9 +38,10 @@ class KeyType(Enum):
 
 
 class TLSFileType(Enum):
-    KEY = 'key'
-    CERT = 'cert'
-    CA = 'ca'
+    KEY = "key"
+    CERT = "cert"
+    CA = "ca"
+
 
 def _make_oid_map(enum_cls):
     """Make a mapping of name: OIDClass from an Enum
@@ -125,14 +126,14 @@ def open_tls_file(file_path, mode, private=True):
     containing_dir = os.path.dirname(file_path)
     fh = None
     try:
-        if 'w' in mode:
+        if "w" in mode:
             os.chmod(containing_dir, mode=0o755)
         fh = open(file_path, mode)
-    except OSError as e:
-        if 'w' in mode:
+    except OSError:
+        if "w" in mode:
             os.makedirs(containing_dir, mode=0o755, exist_ok=True)
             os.chmod(containing_dir, mode=0o755)
-            fh = open(file_path, 'w')
+            fh = open(file_path, "w")
         else:
             raise
     yield fh
@@ -141,11 +142,16 @@ def open_tls_file(file_path, mode, private=True):
     fh.close()
 
 
-class TLSFile():
+class TLSFile:
     """Describes basic information about files used for TLS"""
 
-    def __init__(self, file_path, encoding=serialization.Encoding.PEM,
-                 file_type=TLSFileType.CERT, x509=None):
+    def __init__(
+        self,
+        file_path,
+        encoding=serialization.Encoding.PEM,
+        file_type=TLSFileType.CERT,
+        x509=None,
+    ):
         if isinstance(encoding, int):
             warnings.warn(
                 "OpenSSL.crypto.TYPE_* encoding arguments are deprecated. Use cryptography.hazmat.primitives.serialization.Encoding enum or string 'PEM'",
@@ -167,7 +173,7 @@ class TLSFile():
         self.x509 = x509
 
     def __str__(self):
-        data = ''
+        data = ""
         if not self.x509:
             self.load()
 
@@ -245,21 +251,28 @@ class TLSFile():
         """Persist this x509 object to disk"""
 
         self.x509 = x509
-        with open_tls_file(self.file_path, 'w',
-                           private=self.is_private()) as fh:
+        with open_tls_file(self.file_path, "w", private=self.is_private()) as fh:
             fh.write(str(self))
 
 
-class TLSFileBundle():
+class TLSFileBundle:
     """Maintains information that is shared by a set of TLSFiles"""
 
-    def __init__(self, common_name, files=None, x509s=None, serial=0,
-                 is_ca=False, parent_ca='', signees=None):
+    def __init__(
+        self,
+        common_name,
+        files=None,
+        x509s=None,
+        serial=0,
+        is_ca=False,
+        parent_ca="",
+        signees=None,
+    ):
         self.record = {}
-        self.record['serial'] = serial
-        self.record['is_ca'] = is_ca
-        self.record['parent_ca'] = parent_ca
-        self.record['signees'] = signees
+        self.record["serial"] = serial
+        self.record["is_ca"] = is_ca
+        self.record["parent_ca"] = parent_ca
+        self.record["signees"] = signees
         for t in TLSFileType:
             setattr(self, t.value, None)
 
@@ -274,8 +287,7 @@ class TLSFileBundle():
         for file_type in TLSFileType:
             if file_type.value in files:
                 file_path = files[file_type.value]
-                setattr(self, file_type.value,
-                        TLSFile(file_path, file_type=file_type))
+                setattr(self, file_type.value, TLSFile(file_path, file_type=file_type))
 
     def save_x509s(self, x509s):
         """Saves the x509 objects to the paths known by this bundle"""
@@ -298,28 +310,27 @@ class TLSFileBundle():
 
     def is_ca(self):
         """Is this bundle for a CA certificate"""
-        return self.record['is_ca']
+        return self.record["is_ca"]
 
     def to_record(self):
         """Create a CertStore record from this TLSFileBundle"""
 
-        tf_list = [getattr(self, k, None) for k in
-                   [_.value for _ in TLSFileType]]
+        tf_list = [getattr(self, k, None) for k in [_.value for _ in TLSFileType]]
         # If a cert isn't defined in this bundle, remove it
         tf_list = filter(lambda x: x, tf_list)
         files = {tf.file_type.value: tf.file_path for tf in tf_list}
-        self.record['files'] = files
+        self.record["files"] = files
         return self.record
 
     def from_record(self, record):
         """Build a bundle from a CertStore record"""
 
         self.record = record
-        self._setup_tls_files(self.record['files'])
+        self._setup_tls_files(self.record["files"])
         return self
 
 
-class CertStore():
+class CertStore:
     """Maintains records of certificates created by Certipy
 
     Minimally, each record keyed by common name needs:
@@ -335,8 +346,9 @@ class CertStore():
     Name field.
     """
 
-    def __init__(self, containing_dir='out', store_file='certipy.json',
-                 remove_existing=False):
+    def __init__(
+        self, containing_dir="out", store_file="certipy.json", remove_existing=False
+    ):
         self.store = {}
         self.containing_dir = containing_dir
         self.store_file_path = os.path.join(containing_dir, store_file)
@@ -353,13 +365,13 @@ class CertStore():
     def save(self):
         """Write the store dict to a file specified by store_file_path"""
 
-        with open(self.store_file_path, 'w') as fh:
+        with open(self.store_file_path, "w") as fh:
             fh.write(json.dumps(self.store, indent=4))
 
     def load(self):
         """Read the store dict from file"""
 
-        with open(self.store_file_path, 'r') as fh:
+        with open(self.store_file_path, "r") as fh:
             self.store = json.loads(fh.read())
 
     def get_record(self, common_name):
@@ -375,8 +387,8 @@ class CertStore():
             return record
         except KeyError as e:
             raise CertNotFoundError(
-                "Unable to find record of {name}"
-                .format(name=common_name), errors=e)
+                "Unable to find record of {name}".format(name=common_name), errors=e
+            )
 
     def get_files(self, common_name):
         """Return a bundle of TLS files associated with a common name"""
@@ -384,9 +396,17 @@ class CertStore():
         record = self.get_record(common_name)
         return TLSFileBundle(common_name).from_record(record)
 
-    def add_record(self, common_name, serial=0, parent_ca='',
-                   signees=None, files=None, record=None,
-                   is_ca=False, overwrite=False):
+    def add_record(
+        self,
+        common_name,
+        serial=0,
+        parent_ca="",
+        signees=None,
+        files=None,
+        record=None,
+        is_ca=False,
+        overwrite=False,
+    ):
         """Manually create a record of certs
 
         Generally, Certipy can be left to manage certificate locations and
@@ -399,23 +419,32 @@ class CertStore():
                 self.get_record(common_name)
                 raise CertExistsError(
                     "Certificate {name} already exists!"
-                    " Set overwrite=True to force add."
-                    .format(name=common_name))
+                    " Set overwrite=True to force add.".format(name=common_name)
+                )
             except CertNotFoundError:
                 pass
 
         record = record or {
-            'serial': serial,
-            'is_ca': is_ca,
-            'parent_ca': parent_ca,
-            'signees': signees,
-            'files': files,
+            "serial": serial,
+            "is_ca": is_ca,
+            "parent_ca": parent_ca,
+            "signees": signees,
+            "files": files,
         }
         self.store[common_name] = record
         self.save()
 
-    def add_files(self, common_name, x509s, files=None, parent_ca='',
-                  is_ca=False, signees=None, serial=0, overwrite=False):
+    def add_files(
+        self,
+        common_name,
+        x509s,
+        files=None,
+        parent_ca="",
+        is_ca=False,
+        signees=None,
+        serial=0,
+        overwrite=False,
+    ):
         """Add a set files comprising a certificate to Certipy
 
         Used with all the defaults, Certipy will manage creation of file paths
@@ -426,12 +455,12 @@ class CertStore():
         if common_name in self.store and not overwrite:
             raise CertExistsError(
                 "Certificate {name} already exists!"
-                " Set overwrite=True to force add."
-                .format(name=common_name))
+                " Set overwrite=True to force add.".format(name=common_name)
+            )
         elif common_name in self.store and overwrite:
             record = self.get_record(common_name)
-            serial = int(record['serial'])
-            record['serial'] = serial + 1
+            serial = int(record["serial"])
+            record["serial"] = serial + 1
             TLSFileBundle(common_name).from_record(record).save_x509s(x509s)
         else:
             file_base_tmpl = "{prefix}/{cn}/{cn}"
@@ -440,17 +469,23 @@ class CertStore():
             )
             try:
                 ca_record = self.get_record(parent_ca)
-                ca_file = ca_record['files']['cert']
+                ca_file = ca_record["files"]["cert"]
             except CertNotFoundError:
-                ca_file = ''
+                ca_file = ""
             files = files or {
-                'key': file_base + '.key',
-                'cert': file_base + '.crt',
-                'ca': ca_file,
+                "key": file_base + ".key",
+                "cert": file_base + ".crt",
+                "ca": ca_file,
             }
             bundle = TLSFileBundle(
-                common_name, files=files, x509s=x509s, is_ca=is_ca,
-                serial=serial, parent_ca=parent_ca, signees=signees)
+                common_name,
+                files=files,
+                x509s=x509s,
+                is_ca=is_ca,
+                serial=serial,
+                parent_ca=parent_ca,
+                signees=signees,
+            )
             self.store[common_name] = bundle.to_record()
         self.save()
 
@@ -459,12 +494,12 @@ class CertStore():
 
         ca_record = self.get_record(ca_name)
         signee_record = self.get_record(signee_name)
-        signees = ca_record['signees'] or {}
+        signees = ca_record["signees"] or {}
         signees = Counter(signees)
         if signee_name not in signees:
             signees[signee_name] = 1
-            ca_record['signees'] = signees
-            signee_record['parent_ca'] = ca_name
+            ca_record["signees"] = signees
+            signee_record["parent_ca"] = ca_name
         self.save()
 
     def remove_sign_link(self, ca_name, signee_name):
@@ -472,12 +507,12 @@ class CertStore():
 
         ca_record = self.get_record(ca_name)
         signee_record = self.get_record(signee_name)
-        signees = ca_record['signees'] or {}
+        signees = ca_record["signees"] or {}
         signees = Counter(signees)
         if signee_name in signees:
             signees[signee_name] = 0
-            ca_record['signees'] = signees
-            signee_record['parent_ca'] = ''
+            ca_record["signees"] = signees
+            signee_record["parent_ca"] = ""
         self.save()
 
     def update_record(self, common_name, **fields):
@@ -494,15 +529,16 @@ class CertStore():
         """Delete the record associated with this common name"""
 
         bundle = self.get_files(common_name)
-        num_signees = len(Counter(bundle.record['signees']))
+        num_signees = len(Counter(bundle.record["signees"]))
         if bundle.is_ca() and num_signees > 0:
             raise CertificateAuthorityInUseError(
-                "Authority {name} has signed {x} certificates"
-                .format(name=common_name, x=num_signees)
+                "Authority {name} has signed {x} certificates".format(
+                    name=common_name, x=num_signees
+                )
             )
         try:
-            ca_name = bundle.record['parent_ca']
-            ca_record = self.get_record(ca_name)
+            ca_name = bundle.record["parent_ca"]
+            self.get_record(ca_name)
             self.remove_sign_link(ca_name, common_name)
         except CertNotFoundError:
             pass
@@ -517,10 +553,10 @@ class CertStore():
         record = self.remove_record(common_name)
         if delete_dir:
             delete_dirs = []
-            if 'files' in record:
-                key_containing_dir = os.path.dirname(record['files']['key'])
+            if "files" in record:
+                key_containing_dir = os.path.dirname(record["files"]["key"])
                 delete_dirs.append(key_containing_dir)
-                cert_containing_dir = os.path.dirname(record['files']['cert'])
+                cert_containing_dir = os.path.dirname(record["files"]["cert"])
                 if key_containing_dir != cert_containing_dir:
                     delete_dirs.append(cert_containing_dir)
                 for d in delete_dirs:
@@ -528,11 +564,15 @@ class CertStore():
         return record
 
 
-class Certipy():
-    def __init__(self, store_dir='out', store_file='certipy.json',
-                 remove_existing=False):
-        self.store = CertStore(containing_dir=store_dir, store_file=store_file,
-                               remove_existing=remove_existing)
+class Certipy:
+    def __init__(
+        self, store_dir="out", store_file="certipy.json", remove_existing=False
+    ):
+        self.store = CertStore(
+            containing_dir=store_dir,
+            store_file=store_file,
+            remove_existing=remove_existing,
+        )
 
     def create_key_pair(self, cert_type, bits):
         """
@@ -595,8 +635,15 @@ class Certipy():
         algorithm = getattr(hashes, digest.upper())()
         return csr.sign(pkey, algorithm)
 
-    def sign(self, req, issuer_cert_key, validity_period, digest="sha256",
-             extensions=None, serial=0):
+    def sign(
+        self,
+        req,
+        issuer_cert_key,
+        validity_period,
+        digest="sha256",
+        extensions=None,
+        serial=0,
+    ):
         """
         Generate a certificate given a certificate request.
 
@@ -640,13 +687,10 @@ class Certipy():
         return cert
 
     def create_ca_bundle_for_names(self, bundle_name, names):
-        """Create a CA bundle to trust only certs defined in names
-        """
+        """Create a CA bundle to trust only certs defined in names"""
 
-        records = [rec for name, rec
-                   in self.store.store.items() if name in names]
-        return self.create_bundle(
-            bundle_name, names=[r['parent_ca'] for r in records])
+        records = [rec for name, rec in self.store.store.items() if name in names]
+        return self.create_bundle(bundle_name, names=[r["parent_ca"] for r in records])
 
     def create_ca_bundle(self, bundle_name, ca_names=None):
         """
@@ -673,13 +717,13 @@ class Certipy():
             if ca_only:
                 names = []
                 for name, record in self.store.store.items():
-                    if record['is_ca']:
+                    if record["is_ca"]:
                         names.append(name)
             else:
                 names = self.store.store.keys()
 
         out_file_path = os.path.join(self.store.containing_dir, bundle_name)
-        with open(out_file_path, 'w') as fh:
+        with open(out_file_path, "w") as fh:
             for name in names:
                 bundle = self.store.get_files(name)
                 bundle.cert.load()
@@ -715,15 +759,25 @@ class Certipy():
         # Build bundles from the graph
         trust_files = {}
         for component, trusts in graph.items():
-            file_name = component + '_trust.crt'
+            file_name = component + "_trust.crt"
             trust_files[component] = self.create_bundle(
-                file_name, names=trusts, ca_only=False)
+                file_name, names=trusts, ca_only=False
+            )
 
         return trust_files
 
-    def create_ca(self, name, ca_name='', cert_type=KeyType.rsa, bits=2048,
-                  alt_names=None, years=5, serial=0, pathlen=0,
-                  overwrite=False):
+    def create_ca(
+        self,
+        name,
+        ca_name="",
+        cert_type=KeyType.rsa,
+        bits=2048,
+        alt_names=None,
+        years=5,
+        serial=0,
+        pathlen=0,
+        overwrite=False,
+    ):
         """
         Create a certificate authority
 
@@ -748,7 +802,7 @@ class Certipy():
             )
             pathlen = None
 
-        parent_ca = ''
+        parent_ca = ""
         if ca_name:
             ca_bundle = self.store.get_files(ca_name)
             signing_key = ca_bundle.key.load()
@@ -799,19 +853,37 @@ class Certipy():
 
         # TODO: start time before today for clock skew?
         cacert = self.sign(
-            req, (signing_cert, signing_key), (0, 60*60*24*365*years),
-            extensions=extensions, serial = serial)
+            req,
+            (signing_cert, signing_key),
+            (0, 60 * 60 * 24 * 365 * years),
+            extensions=extensions,
+            serial=serial,
+        )
 
-        x509s = {'key': cakey, 'cert': cacert, 'ca': cacert}
-        self.store.add_files(name, x509s, overwrite=overwrite,
-                             parent_ca=parent_ca, is_ca=True, serial = serial)
+        x509s = {"key": cakey, "cert": cacert, "ca": cacert}
+        self.store.add_files(
+            name,
+            x509s,
+            overwrite=overwrite,
+            parent_ca=parent_ca,
+            is_ca=True,
+            serial=serial,
+        )
         if ca_name:
             self.store.add_sign_link(ca_name, name)
         return self.store.get_record(name)
 
-    def create_signed_pair(self, name, ca_name, cert_type=KeyType.rsa,
-                           bits=2048, years=5, alt_names=None, serial=0,
-                           overwrite=False):
+    def create_signed_pair(
+        self,
+        name,
+        ca_name,
+        cert_type=KeyType.rsa,
+        bits=2048,
+        years=5,
+        alt_names=None,
+        serial=0,
+        overwrite=False,
+    ):
         """
         Create a key-cert pair
 
@@ -856,9 +928,10 @@ class Certipy():
             req, (cacert, cakey), (now, eol), extensions=extensions, serial=serial
         )
 
-        x509s = {'key': key, 'cert': cert, 'ca': None}
-        self.store.add_files(name, x509s, parent_ca=ca_name,
-                             overwrite=overwrite, serial = serial)
+        x509s = {"key": key, "cert": cert, "ca": None}
+        self.store.add_files(
+            name, x509s, parent_ca=ca_name, overwrite=overwrite, serial=serial
+        )
 
         # Relate these certs as being parent and child
         self.store.add_sign_link(ca_name, name)
