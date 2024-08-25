@@ -41,7 +41,7 @@ requires-python = ">=3.7"
 dependencies = ["cryptography", "ipaddress"]
 
 [project.optional-dependencies]
-dev = ["pytest", "flask", "requests", "pre-commit", "black", "ruff"]
+dev = ["pytest", "flask", "requests", "pre-commit", "ruff"]
 
 [tool.setuptools.packages.find]
 include = ["certipy"]
