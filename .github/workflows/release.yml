@@ -9,8 +9,6 @@ on:
 jobs:
   release-build:
     runs-on: ubuntu-latest
-    environment:
-      name: Release
     steps:
       - uses: actions/checkout@v4
 
