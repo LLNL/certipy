@@ -41,7 +41,7 @@ requires-python = ">=3.7"
 dependencies = ["cryptography", "ipaddress"]
 
 [project.optional-dependencies]
-dev = ["pytest", "flask", "requests", "pre-commit", "ruff"]
+dev = ["pytest", "flask", "build", "requests", "pre-commit", "ruff", "bump-my-version"]
 
 [tool.setuptools.dynamic]
 version = {attr = "certipy.version.__version__"}
@@ -54,3 +54,18 @@ certipy = "certipy.command_line:main"
 
 [project.urls]
 Homepage = "https://github.com/LLNL/certipy"
+
+[tool.bumpversion]
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = "--no-verify"
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+current_version = "0.1.3"
+search = "{current_version}"
+replace = "{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "certipy/version.py"
