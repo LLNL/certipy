@@ -922,6 +922,10 @@ class Certipy:
         cacert = ca_bundle.cert.load()
         cakey = ca_bundle.key.load()
 
+        extensions.append(
+            (x509.AuthorityKeyIdentifier.from_issuer_public_key(cacert.public_key()), False)
+        )
+
         now = datetime.now(timezone.utc)
         eol = now + timedelta(days=years * 365)
         cert = self.sign(

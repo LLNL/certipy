@@ -383,9 +383,6 @@ def test_certs():
             ssl_context.verify_mode = ssl.CERT_REQUIRED
             ssl_context.load_default_certs()
             ssl_context.load_cert_chain(ca_record["files"]["cert"], ca_record["files"]["key"])
-            # currently required to pass on 3.13
-            # if hasattr(ssl, "VERIFY_X509_STRICT"):
-            #     ssl_context.verify_flags &= ~ssl.VERIFY_X509_STRICT
 
             # Succeeds when supplying the CA cert
             with urlopen(url, context=ssl_context):
