@@ -53,6 +53,8 @@ def make_flask_app():
     @app.route("/")
     def working():
         return "working"
+    
+    return app
 
 
 @contextmanager
