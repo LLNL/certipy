@@ -10,7 +10,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 ###############################################################################
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm>=8"]
+requires = ["setuptools>=64", "setuptools_scm>=7"]
 build-backend = "setuptools.build_meta"
 
 [project]
