@@ -41,7 +41,7 @@ requires-python = ">=3.7"
 dependencies = ["cryptography"]
 
 [project.optional-dependencies]
-dev = ["pytest", "flask", "build", "requests", "pre-commit", "ruff", "bump-my-version"]
+dev = ["pytest", "flask", "build", "pre-commit", "ruff", "bump-my-version"]
 
 [tool.setuptools.dynamic]
 version = {attr = "certipy.version.__version__"}
