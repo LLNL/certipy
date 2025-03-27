@@ -12,13 +12,12 @@
 
 import os
 import pytest
-import requests
 import socket
 import ssl
+from urllib.request import urlopen, URLError
 from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from flask import Flask
-from requests.exceptions import SSLError
 from tempfile import TemporaryDirectory
 from threading import Thread
 from werkzeug.serving import make_server
@@ -61,7 +60,7 @@ def tls_server(certfile: str, keyfile: str, host: str = "localhost", port: int =
     if port == 0:
         port = find_free_port()
 
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_context.load_cert_chain(certfile, keyfile)
     server = make_server(
         host, port, make_flask_app(), ssl_context=ssl_context, threaded=True
@@ -373,10 +372,19 @@ def test_certs():
         ) as server:
             # Execute/Verify
             url = f"https://{server.host}:{server.port}"
-
             # Fails without specifying a CA for verification
-            with pytest.raises(SSLError):
-                requests.get(url)
+            with pytest.raises(URLError, match="SSL"):
+                with urlopen(url):
+                    pass
+
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca_record["files"]["cert"])
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
+            ssl_context.load_default_certs()
+            ssl_context.load_cert_chain(ca_record["files"]["cert"], ca_record["files"]["key"])
+            # currently required to pass on 3.13
+            # if hasattr(ssl, "VERIFY_X509_STRICT"):
+            #     ssl_context.verify_flags &= ~ssl.VERIFY_X509_STRICT
 
             # Succeeds when supplying the CA cert
-            requests.get(url, verify=ca_record["files"]["cert"])
+            with urlopen(url, context=ssl_context):
+                pass
