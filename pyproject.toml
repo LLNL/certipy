@@ -63,7 +63,7 @@ commit_args = "--no-verify"
 tag = true
 tag_name = "v{new_version}"
 tag_message = "Bump version: {current_version} → {new_version}"
-current_version = "0.2.1"
+current_version = "0.2.2"
 search = "{current_version}"
 replace = "{new_version}"
 
